@@ -10,7 +10,7 @@ import { parse as parseToml } from "smol-toml";
 import yargs from "yargs";
 
 import ownPackageJson from "../package.json" with { type: "json" };
-import { isRecord, readErrorMessage, renderTemplate, shortenDigest } from "./helpers.js";
+import { readErrorMessage, renderTemplate, shortenDigest } from "./helpers.js";
 
 /**
  * This package's logger. Records go nowhere until an entry point configures a sink, so importing the package as a
@@ -331,6 +331,12 @@ const CARGO_WORKSPACE_DEPENDENCY_TYPE = "workspace.dependencies";
 
 const CARGO_DEPENDENCY_SECTION_LIST = ["build-dependencies", "dependencies", "dev-dependencies"] as const;
 
+// A partial Cargo.toml manifest definition based on https://www.schemastore.org/cargo.json.
+type CargoDependency = string | { workspace?: boolean };
+type CargoDependencyTable = Record<string, CargoDependency>;
+type CargoPlatform = Partial<Record<(typeof CARGO_DEPENDENCY_SECTION_LIST)[number], CargoDependencyTable>>;
+type CargoManifest = CargoPlatform & { target?: Record<string, CargoPlatform> };
+
 const NPM_DEPENDENCY_GROUP_LIST = [
   "dependencies",
   "devDependencies",
@@ -402,7 +408,7 @@ export const getOverridePackageNameList = (workspacePackageList: Package[], depe
 
 // Unreviewed
 /** Reads and parses a package's crate manifest, or `null` when the package isn't a crate at all. */
-const readCargoManifest = async (manifestFilePath: string): Promise<Record<string, unknown> | null> => {
+const readCargoManifest = async (manifestFilePath: string): Promise<CargoManifest | null> => {
   const content = await readFile(manifestFilePath, "utf8").catch(() => null);
 
   if (content === null) {
@@ -417,35 +423,20 @@ const readCargoManifest = async (manifestFilePath: string): Promise<Record<strin
 };
 
 // Unreviewed
-const isWorkspaceInheritedEntry = (entry: unknown): boolean => isRecord(entry) && entry.workspace === true;
-
-// Unreviewed
 /** Collects a Cargo manifest's dependency tables, including the per-platform `[target.'cfg(…)'.dependencies]` ones. */
-const readCargoDependencyTableList = (manifest: Record<string, unknown>): unknown[] => {
-  const tableList: unknown[] = CARGO_DEPENDENCY_SECTION_LIST.map((sectionName) => manifest[sectionName]);
-  const targetTable = manifest.target;
-
-  if (isRecord(targetTable)) {
-    for (const platformTable of Object.values(targetTable)) {
-      if (isRecord(platformTable)) {
-        for (const sectionName of CARGO_DEPENDENCY_SECTION_LIST) {
-          tableList.push(platformTable[sectionName]);
-        }
-      }
-    }
-  }
-
-  return tableList;
-};
+const readCargoDependencyTableList = (manifest: CargoManifest): (CargoDependencyTable | undefined)[] => [
+  ...CARGO_DEPENDENCY_SECTION_LIST.map((sectionName) => manifest[sectionName]),
+  ...Object.values(manifest.target ?? {}).flatMap((platformSection) =>
+    CARGO_DEPENDENCY_SECTION_LIST.map((sectionName) => platformSection[sectionName]),
+  ),
+];
 
 // Unreviewed
-const inheritsCargoWorkspaceDependency = (manifest: Record<string, unknown>, dependencyName: string): boolean =>
+const inheritsCargoWorkspaceDependency = (manifest: CargoManifest, dependencyName: string): boolean =>
   readCargoDependencyTableList(manifest).some((table) => {
-    if (!isRecord(table)) {
-      return false;
-    }
+    const entry = table?.[dependencyName];
 
-    return isWorkspaceInheritedEntry(table[dependencyName]);
+    return typeof entry === "object" && entry.workspace === true;
   });
 
 // Unreviewed

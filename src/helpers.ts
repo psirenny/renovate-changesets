@@ -6,11 +6,6 @@ export const shortenDigest = (digest: string): string =>
   digest.replace(/^(?<algorithm>[^:]*:)?(?<hash>.{0,7}).*$/u, "$<algorithm>$<hash>");
 
 // Unreviewed
-/** Whether a value is a keyed object, narrowing it so its keys can be read without asserting a shape. */
-export const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null;
-
-// Unreviewed
 /**
  * The text to report for a thrown value.
  *
