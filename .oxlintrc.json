@@ -1,0 +1,80 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "categories": {
+    "correctness": "deny",
+    "pedantic": "deny",
+    "perf": "deny",
+    "restriction": "deny",
+    "style": "deny",
+    "suspicious": "deny"
+  },
+  "ignorePatterns": ["**/dist/**"],
+  "jsPlugins": ["@logtape/lint/eslint"],
+  "options": {
+    "reportUnusedDisableDirectives": "deny"
+  },
+  "plugins": ["import", "jsdoc", "node", "oxc", "promise", "typescript", "unicorn", "vitest"],
+  "rules": {
+    "@logtape/lint/no-message-interpolation": "error",
+    "@logtape/lint/no-unawaited-log": "error",
+    "@logtape/lint/prefer-lazy-evaluation": "warn",
+    "@logtape/lint/require-meta-sink": "warn",
+    "eslint/capitalized-comments": [
+      "error",
+      "always",
+      {
+        "ignoreConsecutiveComments": true,
+        "ignorePattern": "v8 ignore|c8 ignore|eslint-|oxlint-"
+      }
+    ],
+    "eslint/complexity": "off",
+    "eslint/func-style": ["error", "expression"],
+    "eslint/require-await": "off",
+    "eslint/id-length": "off",
+    "eslint/max-classes-per-file": "off",
+    "eslint/max-depth": "off",
+    "eslint/max-lines": "off",
+    "eslint/max-lines-per-function": "off",
+    "eslint/max-nested-callbacks": "off",
+    "eslint/max-params": "off",
+    "eslint/max-statements": "off",
+    "eslint/no-continue": "off",
+    "eslint/no-magic-numbers": "off",
+    "eslint/no-ternary": "off",
+    "eslint/no-undefined": "off",
+    "eslint/one-var": ["error", "never"],
+    "eslint/sort-imports": "off",
+    "import/consistent-type-specifier-style": "off",
+    "import/max-dependencies": "off",
+    "import/exports-last": "off",
+    "import/group-exports": "off",
+    "import/no-named-export": "off",
+    "import/no-nodejs-modules": "off",
+    "import/no-relative-parent-imports": "off",
+    "import/prefer-default-export": "off",
+    "jsdoc/require-param": "off",
+    "jsdoc/require-returns": "off",
+    "node/no-top-level-await": "off",
+    "oxc/no-async-await": "off",
+    "oxc/no-map-spread": "off",
+    "oxc/no-optional-chaining": "off",
+    "oxc/no-rest-spread-properties": "off",
+    "typescript/consistent-type-definitions": ["error", "type"],
+    "typescript/max-params": "off",
+    "typescript/prefer-readonly-parameter-types": "off",
+    "unicorn/max-nested-calls": "off",
+    "unicorn/no-null": "off",
+    "unicorn/number-literal-case": "off",
+    "vitest/max-expects": "off",
+    "vitest/max-nested-describe": "off",
+    "vitest/no-hooks": "off",
+    "vitest/require-hook": ["error", { "allowedFunctionCalls": ["propertyTest.prop"] }],
+    "vitest/no-importing-vitest-globals": "off",
+    "vitest/prefer-lowercase-title": "off",
+    "vitest/require-test-timeout": "off",
+    "vitest/valid-title": [
+      "error",
+      { "ignoreTypeOfDescribeName": true, "mustMatch": { "it": "^[^\\p{Ll}]", "test": "^[^\\p{Ll}]" } }
+    ]
+  }
+}

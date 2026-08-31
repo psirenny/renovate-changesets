@@ -1,0 +1,78 @@
+{
+  "$schema": "https://v2-10-12.turborepo.dev/schema.json",
+  "tasks": {
+    "actionlint:check": {
+      "inputs": [".github/actionlint.yaml", ".github/workflows/**"]
+    },
+    "build": {
+      "inputs": ["src/**/*.ts", "tsconfig.json", "tsdown.config.ts"],
+      "outputs": ["dist/**"]
+    },
+    "check": {
+      "dependsOn": [
+        "actionlint:check",
+        "markdownlint:check",
+        "npmpkgjsonlint:check",
+        "oxfmt:check",
+        "oxlint:check",
+        "renovateconfig:check",
+        "typescript:check",
+        "v8r:check",
+        "test"
+      ]
+    },
+    "markdownlint:check": {
+      "inputs": ["!.turbo/**", "!dist/**", "!node_modules/**", "**/*.md", ".gitignore", ".markdownlint-cli2.jsonc"]
+    },
+    "markdownlint:fix": {
+      "cache": false
+    },
+    "npmpkgjsonlint:check": {
+      "inputs": [".npmpackagejsonlintignore", ".npmpackagejsonlintrc.json", "package.json"]
+    },
+    "oxfmt:check": {
+      "inputs": [
+        "!.turbo/**",
+        "!dist/**",
+        "!node_modules/**",
+        "**/*.json",
+        "**/*.jsonc",
+        "**/*.md",
+        "**/*.ts",
+        "**/*.yaml",
+        ".gitignore",
+        ".oxfmtrc.json"
+      ]
+    },
+    "oxfmt:fix": {
+      "cache": false
+    },
+    "oxlint:check": {
+      "inputs": [
+        "!.turbo/**",
+        "!dist/**",
+        "!node_modules/**",
+        "**/*.ts",
+        ".gitignore",
+        ".oxlintrc.json",
+        "tsconfig.json"
+      ]
+    },
+    "oxlint:fix": {
+      "cache": false
+    },
+    "renovateconfig:check": {
+      "inputs": ["renovate.json"]
+    },
+    "test": {
+      "inputs": ["src/**/*.ts", "vitest.config.ts"]
+    },
+    "typescript:check": {
+      "inputs": ["!.turbo/**", "!dist/**", "!node_modules/**", "**/*.ts", "tsconfig.json"]
+    },
+    "v8r:check": {
+      "inputs": ["!.turbo/**", "!dist/**", "!node_modules/**", "**/*.json", "**/*.yaml", ".gitignore", ".v8rignore"]
+    }
+  },
+  "ui": "tui"
+}

@@ -1,0 +1,6 @@
+allowBuilds:
+  core-js-pure: true
+  dtrace-provider: true
+  re2: true
+minimumReleaseAge: 4320 # Keep this in sync with Renovate `security:minimumReleaseAgeNpm`.
+pmOnFail: error

@@ -1,0 +1,44 @@
+{
+  // ── Formatting ──────────────────────────────────────────────────────────────
+  // Oxc supplies both the linter (oxlint) and the formatter (oxfmt) here, so it is pinned per language. Pinning
+  // matters because Prettier is also installed and would otherwise claim these files.
+  "editor.formatOnSave": true,
+  "[javascript]": { "editor.defaultFormatter": "oxc.oxc-vscode" },
+  "[json]": { "editor.defaultFormatter": "oxc.oxc-vscode" },
+  "[jsonc]": { "editor.defaultFormatter": "oxc.oxc-vscode" },
+  "[markdown]": { "editor.defaultFormatter": "oxc.oxc-vscode" },
+  "[typescript]": { "editor.defaultFormatter": "oxc.oxc-vscode" },
+  "[yaml]": { "editor.defaultFormatter": "oxc.oxc-vscode" },
+
+  // ── Autofix on save ─────────────────────────────────────────────────────────
+  "editor.codeActionsOnSave": {
+    // Same fixes as `pnpm run oxlint:fix`.
+    "source.fixAll.oxc": "explicit",
+    // Same fixes as `pnpm run markdownlint:fix`. Needs the markdownlint extension.
+    "source.fixAll.markdownlint": "explicit"
+  },
+
+  // ── oxlint ──────────────────────────────────────────────────────────────────
+  // Matches `oxlint --type-aware` in the `oxlint:check` script, so the editor reports what CI reports. Defaults to
+  // false, which would otherwise hide every type-aware finding.
+  "oxc.typeAware": true,
+  "oxc.configPath": ".oxlintrc.json",
+  // A disable comment that no longer suppresses anything is an error, matching `options.reportUnusedDisableDirectives`
+  // in .oxlintrc.json. Oxlint reports these but cannot strip them — neither `--fix` nor `--fix-dangerously` removes
+  // one — so they have to be deleted by hand.
+  "oxc.unusedDisableDirectives": "deny",
+
+  // ── Other linters ───────────────────────────────────────────────────────────
+  // There is no ESLint config in this repository; the `eslint-disable` comments are read by oxlint. Leaving the
+  // ESLint extension on would report a missing configuration.
+  "eslint.enable": false,
+  // actionlint, v8r, npm-package-json-lint and renovate-config-validator have no language server. They run as tasks
+  // — see .vscode/tasks.json. `check: all` is the default build task (⇧⌘B).
+  "yaml.schemas": {
+    "https://json.schemastore.org/github-workflow.json": ".github/workflows/*.yaml"
+  },
+
+  // Use the TypeScript pinned in the lockfile rather than the one bundled with VS Code.
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "typescript.enablePromptUseWorkspaceTsdk": true
+}

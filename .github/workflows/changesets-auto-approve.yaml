@@ -1,0 +1,25 @@
+name: Changesets auto-approve
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - synchronize
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+jobs:
+  changesets:
+    if: >-
+      github.event.pull_request.user.login == 'psirenny' && github.event.pull_request.head.repo.full_name ==
+      github.repository && github.event.pull_request.head.ref == 'changeset-release/main'
+    name: "Changesets: Approve"
+    runs-on: ubuntu-24.04
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Approve the Changesets Release pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: gh pr review "$PR_URL" --approve

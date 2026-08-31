@@ -1,0 +1,51 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "check: all",
+      "detail": "Runs every check the CI workflow runs, via turbo.",
+      "type": "shell",
+      "command": "pnpm run check",
+      "group": { "kind": "build", "isDefault": true },
+      "presentation": { "clear": true, "panel": "dedicated", "reveal": "always" },
+      // Turbo prefixes each line with `<task>: `, which the pattern skips before the file path.
+      "problemMatcher": [
+        "$tsc",
+        {
+          "owner": "renovate-changesets-check",
+          "source": "check",
+          "fileLocation": ["relative", "${workspaceFolder}"],
+          "pattern": {
+            "regexp": "^(?:[a-z0-9:-]+: )?(\\S+?):(\\d+):(\\d+): (?:(error|warning) )?(.+)$",
+            "file": 1,
+            "line": 2,
+            "column": 3,
+            "severity": 4,
+            "message": 5
+          }
+        }
+      ]
+    },
+    {
+      "label": "lint: actionlint",
+      "detail": "Validates the GitHub Actions workflows. No extension covers this.",
+      "type": "shell",
+      "command": "pnpm run actionlint:check",
+      "presentation": { "panel": "dedicated", "reveal": "silent" },
+      "problemMatcher": {
+        "owner": "actionlint",
+        "source": "actionlint",
+        "fileLocation": ["relative", "${workspaceFolder}"],
+        "pattern": { "regexp": "^(\\S+?):(\\d+):(\\d+): (.+)$", "file": 1, "line": 2, "column": 3, "message": 4 }
+      }
+    },
+    {
+      "label": "lint: schemas and package.json",
+      "detail": "v8r, npm-package-json-lint and renovate-config-validator. These report no line numbers, so read the terminal.",
+      "type": "shell",
+      "command": "pnpm run v8r:check && pnpm run npmpkgjsonlint:check && pnpm run renovateconfig:check",
+      "presentation": { "panel": "dedicated", "reveal": "always" },
+      "problemMatcher": []
+    }
+  ]
+}

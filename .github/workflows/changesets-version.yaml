@@ -1,0 +1,38 @@
+name: Changesets version
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .changeset/**
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+jobs:
+  changesets:
+    name: "Changesets: Version"
+    runs-on: ubuntu-24.04
+    permissions: write-all
+    steps:
+      - name: Checkout Git repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Install PNPM
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          cache: pnpm
+          node-version-file: .node-version
+      - name: Install Node.js dependencies
+        run: pnpm install
+      - name: Changesets — Open or update a Release pull request
+        uses: changesets/action@8488615a623b1b9c987934bb89eae8af6a946ac1 # v2.1.1
+        with:
+          commit-message: Release 🚀
+          # A personal access token rather than the default `GITHUB_TOKEN`: a push made with the
+          # default token doesn't trigger other workflows, so the Release pull request would
+          # never run CI.
+          github-token: ${{ secrets.GH_PAT }}
+          pr-title: Release 🚀
+          version-script: pnpm run version

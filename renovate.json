@@ -1,0 +1,51 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "automerge": true,
+  "dependencyDashboard": true,
+  "extends": [
+    "config:recommended",
+    "security:minimumReleaseAgeNpm",
+    "helpers:pinGitHubActionDigests",
+    ":configMigration",
+    "abandonments:recommended"
+  ],
+  "ignorePresets": ["group:monorepos", "group:recommended"],
+  "labels": ["Maintenance"],
+  "packageRules": [
+    {
+      "description": "Update every major dependency individually.",
+      "automerge": false,
+      "matchUpdateTypes": ["major"]
+    },
+    {
+      "description": "Update every non-major dependency together.",
+      "groupName": "non-major dependencies",
+      "groupSlug": "non-major",
+      "matchUpdateTypes": ["bump", "digest", "minor", "patch", "pin", "pinDigest", "replacement", "rollback"]
+    },
+    {
+      "description": "Treat every semver 0.x dependency as a minor update rather than a major update.",
+      "automerge": true,
+      "groupName": "non-major dependencies",
+      "groupSlug": "non-major",
+      "matchCurrentVersion": "<1.0.0",
+      "matchUpdateTypes": ["major"]
+    }
+  ],
+  "platformAutomerge": true,
+  "platformCommit": "enabled",
+  "postUpdateOptions": ["pnpmDedupe"],
+  "postUpgradeTasks": {
+    "description": "Write the changesets for this branch with the tool this repository publishes, built from the branch's own source.",
+    "commands": [
+      "pnpm install --frozen-lockfile --ignore-scripts",
+      "pnpm run build",
+      "node dist/cli.js '{{{encodeBase64 (toJSON upgrades)}}}'"
+    ],
+    "executionMode": "branch"
+  },
+  "prConcurrentLimit": 0,
+  "prHourlyLimit": 0,
+  "rebaseWhen": "behind-base-branch",
+  "timezone": "America/New_York"
+}

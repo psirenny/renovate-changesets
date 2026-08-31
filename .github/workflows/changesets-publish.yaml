@@ -1,0 +1,49 @@
+name: Changesets publish
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - closed
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+jobs:
+  changesets:
+    if: >-
+      github.event.pull_request.merged == true && github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.ref == 'changeset-release/main'
+    name: "Changesets: Publish"
+    runs-on: ubuntu-24.04
+    permissions: write-all
+    steps:
+      - name: Checkout Git repository from the Release pull request head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Avoid GitHub Merge Queue combining newer changesets along side an older release:
+          # https://github.com/changesets/action/issues/507
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+          token: ${{ secrets.GH_PAT }}
+      - name: Install PNPM
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          cache: pnpm
+          node-version-file: .node-version
+          registry-url: https://registry.npmjs.org
+      - name: Install Node.js dependencies
+        run: pnpm install
+      - name: Changesets — Publish to npm and tag the release
+        uses: changesets/action@8488615a623b1b9c987934bb89eae8af6a946ac1 # v2.1.1
+        env:
+          # Attests that the tarball was built by this workflow. Requires a public repository;
+          # drop it while the repository is private or `npm publish` will refuse to run.
+          NPM_CONFIG_PROVENANCE: "true"
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        with:
+          # The release workflow triggers on the pushed Git tag, not on a GitHub release.
+          create-github-releases: false
+          # A tag pushed with the default `GITHUB_TOKEN` doesn't trigger other workflows.
+          github-token: ${{ secrets.GH_PAT }}
+          publish-script: pnpm run publish-packages

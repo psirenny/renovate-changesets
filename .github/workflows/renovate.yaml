@@ -1,0 +1,54 @@
+name: Renovate
+on:
+  schedule:
+    - cron: "0 0 * * *"
+  workflow_dispatch:
+    inputs:
+      is-dry-run:
+        description: Whether this is a dry run. If true, Renovate will resolve updates without opening pull requests.
+        type: boolean
+        default: false
+      log-level:
+        description: The log level to use for Renovate.
+        type: choice
+        default: info
+        options:
+          - trace
+          - debug
+          - info
+          - warn
+          - error
+          - fatal
+concurrency:
+  cancel-in-progress: true
+  group: renovate
+permissions:
+  contents: read
+jobs:
+  renovate:
+    name: Renovate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout Git repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install PNPM
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          cache: pnpm
+          node-version-file: .node-version
+      - name: Install Node.js dependencies
+        run: pnpm install
+      - name: Run Renovate
+        env:
+          LOG_LEVEL: ${{ inputs.log-level }}
+          RENOVATE_ALLOWED_COMMANDS:
+            '["^pnpm install --frozen-lockfile --ignore-scripts$", "^pnpm run build$", "^node dist/cli\\.js "]'
+          RENOVATE_BINARY_SOURCE: global
+          RENOVATE_DRY_RUN: ${{ inputs.is-dry-run == true && 'full' || '' }}
+          RENOVATE_GITHUB_COM_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RENOVATE_REPOSITORIES: ${{ github.repository }}
+          RENOVATE_TOKEN: ${{ secrets.GH_PAT }}
+        run: pnpm exec renovate

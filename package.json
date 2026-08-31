@@ -1,0 +1,95 @@
+{
+  "name": "renovate-changesets",
+  "version": "0.0.0",
+  "description": "Write one Changesets file per package and dependency from Renovate's own upgrade payload",
+  "keywords": [
+    "catalog",
+    "changeset",
+    "changesets",
+    "monorepo",
+    "renovate",
+    "workspace"
+  ],
+  "homepage": "https://github.com/psirenny/renovate-changesets#readme",
+  "bugs": {
+    "url": "https://github.com/psirenny/renovate-changesets/issues"
+  },
+  "license": "MIT",
+  "author": "Dennis Torres <djtorres@protonmail.com>",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/psirenny/renovate-changesets.git"
+  },
+  "bin": {
+    "renovate-changesets": "dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "actionlint:check": "github-actionlint",
+    "build": "tsdown",
+    "check-all": "turbo run check",
+    "fix": "pnpm run oxfmt:fix && pnpm run oxlint:fix && pnpm run markdownlint:fix",
+    "markdownlint:check": "markdownlint-cli2",
+    "markdownlint:fix": "markdownlint-cli2 --fix",
+    "npmpkgjsonlint:check": "npmPkgJsonLint .",
+    "oxfmt:check": "oxfmt --check .",
+    "oxfmt:fix": "oxfmt .",
+    "oxlint:check": "oxlint --type-aware --max-warnings 0",
+    "oxlint:fix": "oxlint --fix --type-aware --max-warnings 0",
+    "prepack": "pnpm run build",
+    "publish-packages": "changeset publish",
+    "renovateconfig:check": "renovate-config-validator --strict",
+    "test": "vitest run",
+    "typescript:check": "tsc --noEmit",
+    "v8r:check": "v8r \"**/*.json\" \"**/*.yaml\"",
+    "version": "changeset version"
+  },
+  "dependencies": {
+    "@changesets/config": "^4.0.0",
+    "@changesets/should-skip-package": "^1.0.0",
+    "@logtape/logtape": "^2.3.2",
+    "@manypkg/get-packages": "^3.1.0",
+    "smol-toml": "^1.8.0",
+    "yargs": "^18.1.0"
+  },
+  "devDependencies": {
+    "@changesets/changelog-github": "1.0.0",
+    "@changesets/cli": "3.0.1",
+    "@fast-check/vitest": "0.4.1",
+    "@logtape/lint": "2.3.2",
+    "@logtape/testing": "2.3.2",
+    "@types/node": "26.3.0",
+    "@types/yargs": "17.0.35",
+    "@vitest/coverage-v8": "4.1.11",
+    "github-actionlint": "1.7.12",
+    "markdownlint-cli2": "0.23.2",
+    "npm-package-json-lint": "11.0.0",
+    "npm-package-json-lint-config-default": "10.0.0",
+    "oxfmt": "0.65.0",
+    "oxlint": "1.80.0",
+    "oxlint-tsgolint": "7.0.2001",
+    "renovate": "44.46.3",
+    "tsdown": "0.22.14",
+    "turbo": "2.10.12",
+    "typescript": "7.0.2",
+    "v8r": "6.1.0",
+    "vitest": "4.1.11"
+  },
+  "peerDependencies": {
+    "@changesets/cli": "^3"
+  },
+  "engines": {
+    "node": "^22.11 || ^24 || >=26"
+  },
+  "packageManager": "pnpm@11.23.0"
+}
