@@ -1,16 +1,9 @@
-/** Shorten a dependency digest so that the hash is at most 7 characters. */
+/**
+ * Shorten a dependency digest so that the hash portion of the digest is at most 7 characters. For example,
+ * "sha256:123456789ABCDEF" → "sha256:1234567".
+ */
 export const shortenDigest = (digest: string): string =>
   digest.replace(/^(?<algorithm>[^:]*:)?(?<hash>.{0,7}).*$/u, "$<algorithm>$<hash>");
-
-// Unreviewed
-/**
- * Whether a rejected filesystem call failed only because the path does not exist.
- *
- * `instanceof` and `in` narrow on their own, so the errno shape is read without asserting it. `NodeJS.ErrnoException`
- * is global, from `@types/node`.
- */
-export const isFileNotFound = (error: unknown): error is NodeJS.ErrnoException =>
-  error instanceof Error && "code" in error && error.code === "ENOENT";
 
 // Unreviewed
 /** Whether a value is a keyed object, narrowing it so its keys can be read without asserting a shape. */

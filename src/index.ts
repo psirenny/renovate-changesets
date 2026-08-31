@@ -10,7 +10,7 @@ import { parse as parseToml } from "smol-toml";
 import yargs from "yargs";
 
 import ownPackageJson from "../package.json" with { type: "json" };
-import { isFileNotFound, isRecord, readErrorMessage, renderTemplate, shortenDigest } from "./helpers.js";
+import { isRecord, readErrorMessage, renderTemplate, shortenDigest } from "./helpers.js";
 
 /**
  * This package's logger. Records go nowhere until an entry point configures a sink, so importing the package as a
@@ -249,7 +249,10 @@ export const getWorkspacePackageList = async (directory: string): Promise<Packag
   // A repository writing for a tool other than Changesets has no `.changeset/config.json` to read, so a missing one
   // falls back rather than failing. A malformed one still fails: it was written on purpose and is wrong.
   const parseResult = await readConfig(directory, workspace).catch((error: unknown) => {
-    if (!isFileNotFound(error)) {
+    // `instanceof` and `in` narrow on their own, so the errno shape is read without asserting it.
+    const isFileMissing = error instanceof Error && "code" in error && error.code === "ENOENT";
+
+    if (!isFileMissing) {
       throw error;
     }
 
@@ -631,7 +634,10 @@ export const readTemplate = async (
   try {
     return await readFile(resolvedFilePath, "utf8");
   } catch (error) {
-    if (isConfigured || !isFileNotFound(error)) {
+    // `instanceof` and `in` narrow on their own, so the errno shape is read without asserting it.
+    const isFileMissing = error instanceof Error && "code" in error && error.code === "ENOENT";
+
+    if (isConfigured || !isFileMissing) {
       throw new Error(`Couldn't read the changeset template at ${resolvedFilePath}.`, { cause: error });
     }
 

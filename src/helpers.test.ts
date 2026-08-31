@@ -1,8 +1,6 @@
-import { readFile } from "node:fs/promises";
-
 import { describe, expect, it } from "vitest";
 
-import { isFileNotFound, readErrorMessage, shortenDigest } from "./helpers.js";
+import { readErrorMessage, shortenDigest } from "./helpers.js";
 
 describe(shortenDigest, () => {
   it.each([
@@ -13,37 +11,6 @@ describe(shortenDigest, () => {
   ])('`shortenDigest("$digest")` → "$expectedDigest"', ({ digest, expectedDigest }) => {
     expect.assertions(1);
     expect(shortenDigest(digest)).toBe(expectedDigest);
-  });
-});
-
-describe(isFileNotFound, () => {
-  it("Recognises the rejection a missing path actually produces", async () => {
-    expect.hasAssertions();
-
-    const rejection = await readFile("/renovate-changesets/definitely/not/here").catch((error: unknown) => error);
-
-    expect([isFileNotFound(rejection)]).toStrictEqual([true]);
-  });
-
-  it("Refuses an error that failed for some other reason", async () => {
-    expect.hasAssertions();
-
-    // A directory read as a file rejects with EISDIR, not ENOENT.
-    const rejection = await readFile("/").catch((error: unknown) => error);
-
-    expect([isFileNotFound(rejection), isFileNotFound(new Error("plain"))]).toStrictEqual([false, false]);
-  });
-
-  it("Refuses anything that isn't an error, including a bare object wearing the code", () => {
-    expect.hasAssertions();
-
-    expect([
-      isFileNotFound({ code: "ENOENT" }),
-      isFileNotFound("ENOENT"),
-      isFileNotFound(null),
-      // eslint-disable-next-line unicorn/no-useless-undefined -- The absent case is one of the inputs under test.
-      isFileNotFound(undefined),
-    ]).toStrictEqual([false, false, false, false]);
   });
 });
 
