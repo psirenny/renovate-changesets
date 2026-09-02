@@ -359,19 +359,15 @@ export const writeChangesets = async ({
   cwd: string;
   resolvedUpgradeList: ResolvedRenovateUpgrade[];
   template: string;
-}): Promise<string[]> => {
-  const filePathList = await Promise.all(
+}): Promise<void> => {
+  await Promise.all(
     resolvedUpgradeList.map(async (resolvedUpgrade) => {
       let content = Handlebars.compile(template, { noEscape: true, strict: true })(resolvedUpgrade);
       content = `${content.replaceAll(/\n{3,}/gu, "\n\n").trim()}\n`;
       const contentHash = createHash("sha256").update(content).digest("hex").slice(0, 8);
-      const filePath = path.join(cwd, ".changeset", `renovate-${contentHash}.md`);
-      await writeFile(filePath, content);
-      return filePath;
+      await writeFile(path.join(cwd, ".changeset", `renovate-${contentHash}.md`), content);
     }),
   );
-
-  return [...new Set(filePathList)].toSorted();
 };
 
 export const run = async ({
@@ -382,7 +378,7 @@ export const run = async ({
   cwd: string;
   templateFilePath: string | undefined;
   upgradeListString: string;
-}): Promise<string[]> => {
+}): Promise<void> => {
   // eslint-disable-next-line typescript/no-unsafe-type-assertion
   const upgradeList = JSON.parse(Buffer.from(upgradeListString, "base64").toString("utf8")) as RenovateUpgrade[];
   const template =
@@ -395,7 +391,7 @@ export const run = async ({
     workspacePackageList,
   });
 
-  return writeChangesets({ cwd, resolvedUpgradeList, template });
+  await writeChangesets({ cwd, resolvedUpgradeList, template });
 };
 
 export const main = async (argumentList: string[] = hideBin(process.argv)): Promise<number> => {

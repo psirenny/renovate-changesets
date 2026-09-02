@@ -989,14 +989,8 @@ const createTemporaryWorkspace = async (fileMap: Record<string, string>): Promis
 };
 
 // Unreviewed
-const runIn = async (directory: string, upgradeList: RenovateUpgrade[]): Promise<string[]> => {
-  const filePathList = await run({
-    cwd: directory,
-    templateFilePath: undefined,
-    upgradeListString: encodeUpgradeList(upgradeList),
-  });
-
-  return filePathList;
+const runIn = async (directory: string, upgradeList: RenovateUpgrade[]): Promise<void> => {
+  await run({ cwd: directory, templateFilePath: undefined, upgradeListString: encodeUpgradeList(upgradeList) });
 };
 
 describe(run, () => {
@@ -1428,11 +1422,14 @@ describe(run, () => {
       },
     ];
 
-    const firstFilePathList = await runIn(directory, upgradeList);
-    const secondFilePathList = await runIn(directory, upgradeList);
+    await runIn(directory, upgradeList);
 
-    expect(secondFilePathList).toStrictEqual(firstFilePathList);
-    await expect(readChangesetList(directory)).resolves.toHaveLength(2);
+    const firstChangesetList = await readChangesetList(directory);
+
+    await runIn(directory, upgradeList);
+
+    expect(firstChangesetList).toHaveLength(2);
+    await expect(readChangesetList(directory)).resolves.toStrictEqual(firstChangesetList);
   });
 
   it("Names each file after a hash of its own content", async () => {
@@ -2073,8 +2070,11 @@ const assertWorkspaceChangesets = async (fixture: FixtureWorkspace): Promise<voi
     templateFilePath: undefined,
     upgradeListString: encodeUpgradeList(upgradeList),
   };
-  const firstFilePathList = await run(options);
-  const secondFilePathList = await run(options);
+  await run(options);
+
+  const firstChangesetList = await readChangesetList(fixture.directory);
+
+  await run(options);
 
   const changesetList = await readChangesetList(fixture.directory);
   const actualPairList: Pair[] = [];
@@ -2129,8 +2129,7 @@ const assertWorkspaceChangesets = async (fixture: FixtureWorkspace): Promise<voi
   expect(actualPairNameList).toStrictEqual(expect.arrayContaining(buildNestedPairList(fixture)));
 
   // 12. Re-running against the same branch rewrites the same files rather than adding a second set.
-  expect(secondFilePathList).toStrictEqual(firstFilePathList);
-  expect(changesetList).toHaveLength(firstFilePathList.length);
+  expect(changesetList).toStrictEqual(firstChangesetList);
 };
 
 describe("Generated workspaces", () => {
