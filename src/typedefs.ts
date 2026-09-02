@@ -49,5 +49,9 @@ export type RenovateUpgrade = {
   prettyDepType?: string | null;
   prettyNewMajor?: string | null;
   prettyNewVersion?: string | null;
+  /** The dependency's source repository, when the datasource's metadata knows it. */
+  sourceUrl?: string | null;
   updateType?: RenovateUpdateType | null;
+  /** The advisory's severity — LOW, MEDIUM, MODERATE, HIGH, CRITICAL, or UNKNOWN — on a vulnerability-alert upgrade. */
+  vulnerabilitySeverity?: string | null;
 };

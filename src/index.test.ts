@@ -122,7 +122,23 @@ describe(getUpgradeList, () => {
       newValue: "^2.10.11",
       newVersion: "2.10.11",
       packageFile: "packages/example/package.json",
+      packageName: "oxlint",
       updateType: "minor",
+    } as const;
+
+    expect(getUpgradeList([upgrade])).toStrictEqual([upgrade]);
+  });
+
+  it("Keeps an override selector when Renovate parsed the clean packageName out of it", () => {
+    expect.hasAssertions();
+
+    const upgrade = {
+      depName: "minimatch@>=10.0.0 <10.2.3",
+      depType: "pnpm-workspace.overrides",
+      displayTo: "10.2.3",
+      newValue: "10.2.3",
+      packageFile: "pnpm-workspace.yaml",
+      packageName: "minimatch",
     } as const;
 
     expect(getUpgradeList([upgrade])).toStrictEqual([upgrade]);
@@ -162,8 +178,21 @@ describe(getUpgradeList, () => {
 
     expect(
       getUpgradeList([
-        { depName: "ky", displayFrom: "", displayTo: "", packageFile: "package.json", updateType: "patch" },
-        { depName: "turbo", newValue: "^3.0.0", packageFile: "package.json", updateType: "patch" },
+        {
+          depName: "ky",
+          displayFrom: "",
+          displayTo: "",
+          packageFile: "package.json",
+          packageName: "ky",
+          updateType: "patch",
+        },
+        {
+          depName: "turbo",
+          newValue: "^3.0.0",
+          packageFile: "package.json",
+          packageName: "turbo",
+          updateType: "patch",
+        },
       ]),
     ).toStrictEqual([]);
     recorder.assertLogged({ level: "warning", message: /empty displayTo/u });
@@ -173,8 +202,8 @@ describe(getUpgradeList, () => {
     expect.hasAssertions();
 
     const upgradeList = getUpgradeList([
-      { depName: "a", displayTo: "1.0.0", packageFile: "packages/a/package.json" },
-      { depName: "b", displayTo: "2.0.0", packageFile: "packages/b/package.json" },
+      { depName: "a", displayTo: "1.0.0", packageFile: "packages/a/package.json", packageName: "a" },
+      { depName: "b", displayTo: "2.0.0", packageFile: "packages/b/package.json", packageName: "b" },
     ]);
 
     expect(upgradeList.map((upgrade) => upgrade.depName)).toStrictEqual(["a", "b"]);
@@ -566,6 +595,7 @@ describe(getSharedDeclarationPackageNameList, () => {
 
 // Unreviewed
 const buildResolvedUpgrade = (overrides: Partial<ResolvedRenovateUpgrade> = {}): ResolvedRenovateUpgrade => ({
+  changesetPackageName: "@fixture/app",
   currentDigest: null,
   currentValue: "^2.0.2",
   currentVersion: "2.0.2",
@@ -580,7 +610,8 @@ const buildResolvedUpgrade = (overrides: Partial<ResolvedRenovateUpgrade> = {}):
   newValue: "^3.0.0",
   newVersion: "3.0.0",
   packageFile: "packages/app/package.json",
-  packageName: "@fixture/app",
+  packageName: "ky",
+  sourceUrl: "https://github.com/sindresorhus/ky",
   updateType: "major",
   ...overrides,
 });
@@ -707,11 +738,14 @@ describe(writeChangesets, () => {
   it("Throws for a field Renovate omitted, so a template guards an optional field with a condition", async () => {
     expect.hasAssertions();
 
-    await expect(render("{{currentDigest}}", { depName: "ky", packageName: "solo" })).rejects.toThrow(
+    await expect(render("{{currentDigest}}", { changesetPackageName: "solo", depName: "ky" })).rejects.toThrow(
       /"currentDigest" not defined/u,
     );
     await expect(
-      render("{{#if currentDigest}}{{currentDigest}}{{else}}none{{/if}}", { depName: "ky", packageName: "solo" }),
+      render("{{#if currentDigest}}{{currentDigest}}{{else}}none{{/if}}", {
+        changesetPackageName: "solo",
+        depName: "ky",
+      }),
     ).resolves.toBe("none\n");
   });
 
@@ -758,7 +792,7 @@ describe("Default template", () => {
     expect.hasAssertions();
 
     await expect(render(defaultTemplate, buildResolvedUpgrade())).resolves.toBe(
-      '---\n"@fixture/app": patch\n---\n\nUpdated ky from ^2.0.2 to ^3.0.0\n',
+      '---\n"@fixture/app": patch\n---\n\nUpdated [ky](https://github.com/sindresorhus/ky) from `^2.0.2` to `^3.0.0`.\n',
     );
   });
 
@@ -766,7 +800,54 @@ describe("Default template", () => {
     expect.hasAssertions();
 
     await expect(render(defaultTemplate, buildResolvedUpgrade({ displayFrom: "" }))).resolves.toBe(
-      '---\n"@fixture/app": patch\n---\n\nUpdated ky to ^3.0.0\n',
+      '---\n"@fixture/app": patch\n---\n\nUpdated [ky](https://github.com/sindresorhus/ky) to `^3.0.0`.\n',
+    );
+  });
+
+  it("Tags a vulnerability-alert upgrade with its severity", async () => {
+    expect.hasAssertions();
+
+    await expect(
+      render(defaultTemplate, buildResolvedUpgrade({ isVulnerabilityAlert: true, vulnerabilitySeverity: "HIGH" })),
+    ).resolves.toBe(
+      '---\n"@fixture/app": patch\n---\n\nUpdated [ky](https://github.com/sindresorhus/ky) from `^2.0.2` to `^3.0.0`. [Security: HIGH]\n',
+    );
+  });
+
+  it("Tags a vulnerability alert that carries no severity as plain Security", async () => {
+    expect.hasAssertions();
+
+    await expect(render(defaultTemplate, buildResolvedUpgrade({ isVulnerabilityAlert: true }))).resolves.toBe(
+      '---\n"@fixture/app": patch\n---\n\nUpdated [ky](https://github.com/sindresorhus/ky) from `^2.0.2` to `^3.0.0`. [Security]\n',
+    );
+  });
+
+  it("Composes the security tag with the other sentences", async () => {
+    expect.hasAssertions();
+
+    const content = await render(
+      defaultTemplate,
+      buildResolvedUpgrade({
+        displayTo: "2.0.2",
+        isPin: true,
+        isVulnerabilityAlert: true,
+        newValue: "2.0.2",
+        newVersion: "2.0.2",
+        updateType: "pin",
+        vulnerabilitySeverity: "CRITICAL",
+      }),
+    );
+
+    expect(content).toBe(
+      '---\n"@fixture/app": patch\n---\n\nPinned [ky](https://github.com/sindresorhus/ky) to `2.0.2`. [Security: CRITICAL]\n',
+    );
+  });
+
+  it("Falls back to backticks when the datasource knows no sourceUrl", async () => {
+    expect.hasAssertions();
+
+    await expect(render(defaultTemplate, buildResolvedUpgrade({ sourceUrl: null }))).resolves.toBe(
+      '---\n"@fixture/app": patch\n---\n\nUpdated `ky` from `^2.0.2` to `^3.0.0`.\n',
     );
   });
 
@@ -785,7 +866,7 @@ describe("Default template", () => {
       }),
     );
 
-    expect(content).toBe('---\n"@fixture/app": patch\n---\n\nReplaced ky ^2.0.2 with some-fork 3.0.0\n');
+    expect(content).toBe('---\n"@fixture/app": patch\n---\n\nReplaced `ky` with `some-fork` `3.0.0`.\n');
   });
 
   it("Doesn't read a rollback as an upgrade", async () => {
@@ -800,11 +881,53 @@ describe("Default template", () => {
         displayTo: "2.10.10",
         isRollback: true,
         newVersion: "2.10.10",
+        packageName: "turbo",
+        sourceUrl: null,
         updateType: "rollback",
       }),
     );
 
-    expect(content).toBe('---\n"@fixture/app": patch\n---\n\nRolled turbo back to 2.10.10\n');
+    expect(content).toBe('---\n"@fixture/app": patch\n---\n\nRolled back `turbo` to `2.10.10`.\n');
+  });
+
+  it("Pins a dependency rather than reading the narrowed range as an update", async () => {
+    expect.hasAssertions();
+
+    const content = await render(
+      defaultTemplate,
+      buildResolvedUpgrade({
+        displayTo: "2.0.2",
+        isPin: true,
+        newValue: "2.0.2",
+        newVersion: "2.0.2",
+        updateType: "pin",
+      }),
+    );
+
+    expect(content).toBe(
+      '---\n"@fixture/app": patch\n---\n\nPinned [ky](https://github.com/sindresorhus/ky) to `2.0.2`.\n',
+    );
+  });
+
+  it("Pins a digest the same way, with no from side on a first pin", async () => {
+    expect.hasAssertions();
+
+    const content = await render(
+      defaultTemplate,
+      buildResolvedUpgrade({
+        depName: "actions/checkout",
+        displayFrom: "",
+        displayTo: "3d3c42e",
+        isPinDigest: true,
+        newDigest: "3d3c42e5aac5ba805825da76410c181273ba90b1",
+        newValue: "v7.0.1",
+        packageName: "actions/checkout",
+        sourceUrl: null,
+        updateType: "pinDigest",
+      }),
+    );
+
+    expect(content).toBe('---\n"@fixture/app": patch\n---\n\nPinned `actions/checkout` to `3d3c42e`.\n');
   });
 
   it("Names both digests on a digest update", async () => {
@@ -820,11 +943,13 @@ describe("Default template", () => {
         displayTo: "cf49c5d",
         newDigest: "sha256:cf49c5dbbbbbbbbb",
         newVersion: null,
+        packageName: "timescaledb",
+        sourceUrl: null,
         updateType: "digest",
       }),
     );
 
-    expect(content).toBe('---\n"@fixture/app": patch\n---\n\nUpdated timescaledb from 032b412 to cf49c5d\n');
+    expect(content).toBe('---\n"@fixture/app": patch\n---\n\nUpdated `timescaledb` from `032b412` to `cf49c5d`.\n');
   });
 });
 
@@ -893,6 +1018,7 @@ describe(run, () => {
         displayTo: "2.10.11",
         newVersion: "2.10.11",
         packageFile: "packages/app/package.json",
+        packageName: "oxlint",
         updateType: "major",
       },
     ]);
@@ -900,7 +1026,7 @@ describe(run, () => {
     const changesetList = await readChangesetList(directory);
 
     expect(changesetList.map(({ content }) => content)).toStrictEqual([
-      '---\n"@fixture/app": patch\n---\n\nUpdated oxlint from 1.10.10 to 2.10.11\n',
+      '---\n"@fixture/app": patch\n---\n\nUpdated `oxlint` from `1.10.10` to `2.10.11`.\n',
     ]);
     expect(changesetList[0]?.fileName).toMatch(/^renovate-[\da-f]{8}\.md$/u);
   });
@@ -930,6 +1056,7 @@ describe(run, () => {
         displayTo: "ccccccc",
         newDigest: "sha256:cccccccddddddd",
         packageFile: ".github/workflows/ci.yaml",
+        packageName: "actions/checkout",
         updateType: "digest",
       },
     ]);
@@ -969,6 +1096,7 @@ describe(run, () => {
         displayTo: "2.10.11",
         newVersion: "2.10.11",
         packageFile: "pnpm-workspace.yaml",
+        packageName: "turbo",
         updateType: "patch",
       },
     ]);
@@ -977,8 +1105,8 @@ describe(run, () => {
     const contentList = changesetList.map((changeset) => changeset.content);
 
     expect(contentList.toSorted()).toStrictEqual([
-      '---\n"@fixture/consumer-a": patch\n---\n\nUpdated turbo from 2.10.10 to 2.10.11\n',
-      '---\n"@fixture/consumer-b": patch\n---\n\nUpdated turbo from 2.10.10 to 2.10.11\n',
+      '---\n"@fixture/consumer-a": patch\n---\n\nUpdated `turbo` from `2.10.10` to `2.10.11`.\n',
+      '---\n"@fixture/consumer-b": patch\n---\n\nUpdated `turbo` from `2.10.10` to `2.10.11`.\n',
     ]);
   });
 
@@ -1010,6 +1138,7 @@ describe(run, () => {
         displayTo: "2.0.0",
         newVersion: "2.0.0",
         packageFile: `packages/${directoryName}/package.json`,
+        packageName: `dependency-${directoryName}`,
       })),
     );
 
@@ -1017,7 +1146,7 @@ describe(run, () => {
     const contentList = changesetList.map((changeset) => changeset.content);
 
     expect(contentList).toStrictEqual([
-      '---\n"@fixture/public": patch\n---\n\nUpdated dependency-public from 1.0.0 to 2.0.0\n',
+      '---\n"@fixture/public": patch\n---\n\nUpdated `dependency-public` from `1.0.0` to `2.0.0`.\n',
     ]);
   });
 
@@ -1034,13 +1163,19 @@ describe(run, () => {
     });
 
     await runIn(directory, [
-      { depName: "ky", displayTo: "2.0.0", newVersion: "2.0.0", packageFile: "packages/outer/inner/package.json" },
+      {
+        depName: "ky",
+        displayTo: "2.0.0",
+        newVersion: "2.0.0",
+        packageFile: "packages/outer/inner/package.json",
+        packageName: "ky",
+      },
     ]);
 
     const changesetList = await readChangesetList(directory);
     const contentList = changesetList.map((changeset) => changeset.content);
 
-    expect(contentList).toStrictEqual(['---\n"@fixture/outer": patch\n---\n\nUpdated ky to 2.0.0\n']);
+    expect(contentList).toStrictEqual(['---\n"@fixture/outer": patch\n---\n\nUpdated `ky` to `2.0.0`.\n']);
   });
 
   it("Gives a nested package its own manifests when Changesets would version it", async () => {
@@ -1054,16 +1189,28 @@ describe(run, () => {
     });
 
     await runIn(directory, [
-      { depName: "ky", displayTo: "2.0.0", newVersion: "2.0.0", packageFile: "packages/outer/inner/package.json" },
-      { depName: "turbo", displayTo: "3.0.0", newVersion: "3.0.0", packageFile: "packages/outer/Dockerfile" },
+      {
+        depName: "ky",
+        displayTo: "2.0.0",
+        newVersion: "2.0.0",
+        packageFile: "packages/outer/inner/package.json",
+        packageName: "ky",
+      },
+      {
+        depName: "turbo",
+        displayTo: "3.0.0",
+        newVersion: "3.0.0",
+        packageFile: "packages/outer/Dockerfile",
+        packageName: "turbo",
+      },
     ]);
 
     const changesetList = await readChangesetList(directory);
     const contentList = changesetList.map((changeset) => changeset.content);
 
     expect(contentList.toSorted()).toStrictEqual([
-      '---\n"@fixture/inner": patch\n---\n\nUpdated ky to 2.0.0\n',
-      '---\n"@fixture/outer": patch\n---\n\nUpdated turbo to 3.0.0\n',
+      '---\n"@fixture/inner": patch\n---\n\nUpdated `ky` to `2.0.0`.\n',
+      '---\n"@fixture/outer": patch\n---\n\nUpdated `turbo` to `3.0.0`.\n',
     ]);
   });
 
@@ -1082,6 +1229,7 @@ describe(run, () => {
         displayTo: "2.0.0",
         newVersion: "2.0.0",
         packageFile: "package.json",
+        packageName: "ky",
       },
       {
         currentVersion: "24.0.0",
@@ -1090,6 +1238,7 @@ describe(run, () => {
         displayTo: "24.1.0",
         newVersion: "24.1.0",
         packageFile: "mise.toml",
+        packageName: "node",
       },
     ]);
 
@@ -1097,8 +1246,8 @@ describe(run, () => {
     const contentList = changesetList.map((changeset) => changeset.content);
 
     expect(contentList.toSorted()).toStrictEqual([
-      '---\n"solo": patch\n---\n\nUpdated ky from 1.0.0 to 2.0.0\n',
-      '---\n"solo": patch\n---\n\nUpdated node from 24.0.0 to 24.1.0\n',
+      '---\n"solo": patch\n---\n\nUpdated `ky` from `1.0.0` to `2.0.0`.\n',
+      '---\n"solo": patch\n---\n\nUpdated `node` from `24.0.0` to `24.1.0`.\n',
     ]);
   });
 
@@ -1130,13 +1279,14 @@ describe(run, () => {
         displayTo: "2.0.0",
         newVersion: "2.0.0",
         packageFile: "packages/app/package.json",
+        packageName: "ky",
       },
     ]);
 
     const changesetList = await readChangesetList(directory);
     const contentList = changesetList.map((changeset) => changeset.content);
 
-    expect(contentList).toStrictEqual(['---\n"@fixture/app": patch\n---\n\nUpdated ky from 1.0.0 to 2.0.0\n']);
+    expect(contentList).toStrictEqual(['---\n"@fixture/app": patch\n---\n\nUpdated `ky` from `1.0.0` to `2.0.0`.\n']);
   });
 
   it("Expands a Yarn catalog to its consumers", async () => {
@@ -1166,6 +1316,7 @@ describe(run, () => {
         displayTo: "2.10.11",
         newVersion: "2.10.11",
         packageFile: "package.json",
+        packageName: "turbo",
         updateType: "patch",
       },
     ]);
@@ -1173,14 +1324,48 @@ describe(run, () => {
     const changesetList = await readChangesetList(directory);
     const contentList = changesetList.map((changeset) => changeset.content);
 
-    expect(contentList).toStrictEqual(['---\n"@fixture/app": patch\n---\n\nUpdated turbo from 2.10.10 to 2.10.11\n']);
+    expect(contentList).toStrictEqual([
+      '---\n"@fixture/app": patch\n---\n\nUpdated `turbo` from `2.10.10` to `2.10.11`.\n',
+    ]);
+  });
+
+  it("Writes a changeset under the clean name for a security-range override", async () => {
+    expect.hasAssertions();
+
+    const directory = await createTemporaryWorkspace({
+      "package.json": serializePackageJson({ name: "root", private: true, version: "0.0.0" }),
+      "packages/declares/package.json": serializePackageJson({
+        dependencies: { minimatch: "^10.0.0" },
+        name: "@fixture/declares",
+        version: "1.0.0",
+      }),
+      "packages/unrelated/package.json": serializePackageJson({ name: "@fixture/unrelated", version: "1.0.0" }),
+      "pnpm-workspace.yaml": buildPnpmWorkspace(["packages/declares", "packages/unrelated"]),
+    });
+
+    await runIn(directory, [
+      {
+        depName: "minimatch@>=10.0.0 <10.2.3",
+        depType: "pnpm-workspace.overrides",
+        displayTo: "10.2.3",
+        newValue: "10.2.3",
+        packageFile: "pnpm-workspace.yaml",
+        packageName: "minimatch",
+      },
+    ]);
+
+    const changesetList = await readChangesetList(directory);
+
+    expect(changesetList.map((changeset) => changeset.content)).toStrictEqual([
+      '---\n"@fixture/declares": patch\n---\n\nUpdated `minimatch` to `10.2.3`.\n',
+    ]);
   });
 
   it("Uses a template the options point at", async () => {
     expect.hasAssertions();
 
     const directory = await createTemporaryWorkspace({
-      ".github/changeset.md": '---\n"{{packageName}}": patch\n---\n\n{{depName}}@{{displayTo}}\n',
+      ".github/changeset.md": '---\n"{{changesetPackageName}}": patch\n---\n\n{{depName}}@{{displayTo}}\n',
       "package.json": serializePackageJson({ name: "solo", version: "1.0.0" }),
     });
 
@@ -1188,7 +1373,7 @@ describe(run, () => {
       cwd: directory,
       templateFilePath: ".github/changeset.md",
       upgradeListString: encodeUpgradeList([
-        { depName: "ky", displayTo: "2.0.0", newVersion: "2.0.0", packageFile: "package.json" },
+        { depName: "ky", displayTo: "2.0.0", newVersion: "2.0.0", packageFile: "package.json", packageName: "ky" },
       ]),
     });
 
@@ -1210,7 +1395,7 @@ describe(run, () => {
         cwd: directory,
         templateFilePath: ".github/missing.md",
         upgradeListString: encodeUpgradeList([
-          { depName: "ky", displayTo: "2.0.0", newVersion: "2.0.0", packageFile: "package.json" },
+          { depName: "ky", displayTo: "2.0.0", newVersion: "2.0.0", packageFile: "package.json", packageName: "ky" },
         ]),
       }),
     ).rejects.toThrow(/ENOENT.*missing\.md/u);
@@ -1230,6 +1415,7 @@ describe(run, () => {
         displayTo: "2.0.0",
         newVersion: "2.0.0",
         packageFile: "package.json",
+        packageName: "ky",
       },
       {
         currentVersion: "1.0.0",
@@ -1238,6 +1424,7 @@ describe(run, () => {
         displayTo: "2.0.0",
         newVersion: "2.0.0",
         packageFile: "package.json",
+        packageName: "turbo",
       },
     ];
 
@@ -1255,7 +1442,9 @@ describe(run, () => {
       "package.json": serializePackageJson({ name: "solo", version: "1.0.0" }),
     });
 
-    await runIn(directory, [{ depName: "ky", displayTo: "2.0.0", newVersion: "2.0.0", packageFile: "package.json" }]);
+    await runIn(directory, [
+      { depName: "ky", displayTo: "2.0.0", newVersion: "2.0.0", packageFile: "package.json", packageName: "ky" },
+    ]);
 
     for (const { content, fileName } of await readChangesetList(directory)) {
       const hash = createHash("sha256").update(content).digest("hex").slice(0, 8);
@@ -1310,7 +1499,9 @@ describe(run, () => {
     });
 
     await expect(
-      runIn(directory, [{ depName: "ky", displayTo: "2.0.0", newVersion: "2.0.0", packageFile: "package.json" }]),
+      runIn(directory, [
+        { depName: "ky", displayTo: "2.0.0", newVersion: "2.0.0", packageFile: "package.json", packageName: "ky" },
+      ]),
     ).rejects.toThrow(/config\.json is invalid/u);
   });
 
@@ -1398,7 +1589,9 @@ describe(main, () => {
     const directory = await createTemporaryWorkspace({
       "package.json": '{ "name": "solo", "version": "1.0.0" }\n',
     });
-    const upgradeList = [{ depName: "ky", displayTo: "2.0.0", newVersion: "2.0.0", packageFile: "package.json" }];
+    const upgradeList = [
+      { depName: "ky", displayTo: "2.0.0", newVersion: "2.0.0", packageFile: "package.json", packageName: "ky" },
+    ];
 
     await expect(main([encodeUpgradeList(upgradeList), "--cwd", directory])).resolves.toBe(0);
     await expect(readChangesetList(directory)).resolves.toHaveLength(1);
@@ -1432,11 +1625,11 @@ describe(main, () => {
     expect.hasAssertions();
 
     const directory = await createTemporaryWorkspace({
-      ".github/changeset.md": '---\n"{{packageName}}": patch\n---\n\n{{depName}}@{{displayTo}}\n',
+      ".github/changeset.md": '---\n"{{changesetPackageName}}": patch\n---\n\n{{depName}}@{{displayTo}}\n',
       "package.json": '{ "name": "solo", "version": "1.0.0" }\n',
     });
     const payload = encodeUpgradeList([
-      { depName: "ky", displayTo: "2.0.0", newVersion: "2.0.0", packageFile: "package.json" },
+      { depName: "ky", displayTo: "2.0.0", newVersion: "2.0.0", packageFile: "package.json", packageName: "ky" },
     ]);
 
     await expect(main([payload, "--cwd", directory, "--template-file-path", ".github/changeset.md"])).resolves.toBe(0);
@@ -1452,11 +1645,11 @@ describe(main, () => {
     expect.hasAssertions();
 
     const directory = await createTemporaryWorkspace({
-      ".github/changeset.md": '---\n"{{packageName}}": patch\n---\n\n{{depName}}@{{displayTo}}\n',
+      ".github/changeset.md": '---\n"{{changesetPackageName}}": patch\n---\n\n{{depName}}@{{displayTo}}\n',
       "package.json": '{ "name": "solo", "version": "1.0.0" }\n',
     });
     const payload = encodeUpgradeList([
-      { depName: "ky", displayTo: "2.0.0", newVersion: "2.0.0", packageFile: "package.json" },
+      { depName: "ky", displayTo: "2.0.0", newVersion: "2.0.0", packageFile: "package.json", packageName: "ky" },
     ]);
 
     vi.stubEnv("RENOVATE_CHANGESETS_CWD", directory);
@@ -1478,7 +1671,7 @@ describe(main, () => {
       "package.json": '{ "name": "solo", "version": "1.0.0" }\n',
     });
     const payload = encodeUpgradeList([
-      { depName: "ky", displayTo: "2.0.0", newVersion: "2.0.0", packageFile: "package.json" },
+      { depName: "ky", displayTo: "2.0.0", newVersion: "2.0.0", packageFile: "package.json", packageName: "ky" },
     ]);
 
     // The environment points somewhere that would fail, so the run only succeeds if the flag wins.
@@ -1735,7 +1928,8 @@ const createFixtureWorkspace = async (plan: FixturePlan): Promise<FixtureWorkspa
 };
 
 const CHANGESET_PATTERN = /^---\n"(?<packageName>[^"]+)": patch\n---\n\n(?<body>.+)\n$/su;
-const BODY_PATTERN = /^Updated (?<dependencyName>\S+) (?:from (?<fromVersion>\S+) )?to (?<toVersion>\S+)$/u;
+const BODY_PATTERN =
+  /^Updated `(?<dependencyName>[^`]+)` (?:from `(?<fromVersion>[^`]+)` )?to `(?<toVersion>[^`]+)`\.$/u;
 const FILE_NAME_PATTERN = /^renovate-(?<hash>[\da-f]{8})\.md$/u;
 
 type Pair = { dependencyName: string; packageName: string };
@@ -1768,6 +1962,7 @@ const buildUpgradeList = (fixture: FixtureWorkspace): RenovateUpgrade[] => [
     displayTo: `${index + 1}.1.0`,
     newVersion: `${index + 1}.1.0`,
     packageFile: `${fixturePackage.directoryPath}/package.json`,
+    packageName: `dependency-${index}`,
     updateType: "minor" as const,
   })),
   // A manifest at the repository root, owned by no package.
@@ -1778,6 +1973,7 @@ const buildUpgradeList = (fixture: FixtureWorkspace): RenovateUpgrade[] => [
     displayTo: "0.2.338",
     newVersion: "0.2.338",
     packageFile: "mise.toml",
+    packageName: "chainctl",
   },
   // A manifest in a directory that isn't a package at all.
   {
@@ -1787,6 +1983,7 @@ const buildUpgradeList = (fixture: FixtureWorkspace): RenovateUpgrade[] => [
     displayTo: "1.1.0",
     newVersion: "1.1.0",
     packageFile: "packages/not-a-package/package.json",
+    packageName: "stray-dependency",
   },
   // One update per catalog, each with its own version.
   ...fixture.catalogNameList.map((catalogName, index) => ({
@@ -1797,6 +1994,7 @@ const buildUpgradeList = (fixture: FixtureWorkspace): RenovateUpgrade[] => [
     displayTo: `10.${index}.1`,
     newVersion: `10.${index}.1`,
     packageFile: "pnpm-workspace.yaml",
+    packageName: CATALOG_DEPENDENCY_NAME,
     updateType: "patch" as const,
   })),
 ];

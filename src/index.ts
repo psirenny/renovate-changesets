@@ -34,17 +34,27 @@ export const configureLogger = async (): Promise<void> => {
 };
 
 export const defaultTemplate = `
+{{#*inline "packageLink"}}{{#if sourceUrl}}[{{packageName}}]({{sourceUrl}}){{else}}\`{{packageName}}\`{{/if}}{{/inline}}
+{{#*inline "securityTag"}}{{#if isVulnerabilityAlert}} [Security{{#if vulnerabilitySeverity}}: {{vulnerabilitySeverity}}{{/if}}]{{/if}}{{/inline}}
 ---
-"{{packageName}}": patch
+"{{changesetPackageName}}": patch
 ---
 
-{{#if isReplacement}}Replaced {{depName}}{{#if displayFrom}} {{displayFrom}}{{/if}} with {{newName}} {{displayTo}}
-{{else}}{{#if isRollback}}Rolled {{depName}} back to {{displayTo}}
-{{else}}Updated {{depName}}{{#if displayFrom}} from {{displayFrom}}{{/if}} to {{displayTo}}{{/if}}{{/if}}
+{{#if isReplacement}}
+Replaced \`{{packageName}}\` with \`{{newName}}\` \`{{displayTo}}\`.{{> securityTag}}
+{{else if isRollback}}
+Rolled back {{> packageLink}} to \`{{displayTo}}\`.{{> securityTag}}
+{{else if isPin}}
+Pinned {{> packageLink}} to \`{{displayTo}}\`.{{> securityTag}}
+{{else if isPinDigest}}
+Pinned {{> packageLink}} to \`{{displayTo}}\`.{{> securityTag}}
+{{else}}
+Updated {{> packageLink}}{{#if displayFrom}} from \`{{displayFrom}}\`{{/if}} to \`{{displayTo}}\`.{{> securityTag}}
+{{/if}}
 `;
 
 /** A {@link RenovateUpgrade} paired with one workspace package whose changelog should record it. */
-export type ResolvedRenovateUpgrade = RenovateUpgrade & { packageName: string };
+export type ResolvedRenovateUpgrade = RenovateUpgrade & { changesetPackageName: string };
 
 // Unreviewed
 /** Skips the upgrades a changeset can't name, with a log record saying why. */
@@ -61,8 +71,10 @@ export const getUpgradeList = (rawUpgradeList: RenovateUpgrade[]): RenovateUpgra
       return [];
     }
 
-    // Skip junk version ranges. For example, "minimatch@>=10.0.0 <10.2.3".
-    if (/[\s<>]/u.test(depName)) {
+    // Renovate pads `packageName` with `depName`, so the two only differ when the extractor parsed a cleaner name out
+    // of an override selector like "minimatch@>=10.0.0 <10.2.3". An upgrade is only junk when even that name is a
+    // version range rather than a dependency name.
+    if (/[\s<>]/u.test(upgrade.packageName ?? depName)) {
       logger.info((format) => format`Skipping "${depName}", which is a version range rather than a dependency name.`);
 
       return [];
@@ -287,20 +299,23 @@ export const getSharedDeclarationPackageNameList = async ({
     return null;
   }
 
+  // Consumers declare a dependency under its clean name, which is `packageName` when `depName` is an override selector
+  // like "minimatch@>=10.0.0 <10.2.3" — Renovate pads `packageName` with `depName` everywhere else.
+  const packageName = upgrade.packageName ?? depName;
   const catalogName = /^(?:pnpm|yarn)\.catalog\.(?<catalogName>.+)$/u.exec(depType)?.groups?.catalogName;
 
   if (catalogName !== undefined) {
-    return getCatalogPackageNameList(workspacePackageList, catalogName, depName);
+    return getCatalogPackageNameList(workspacePackageList, catalogName, packageName);
   }
 
   if (depType === "workspace.dependencies") {
-    return getCargoWorkspacePackageNameList(workspacePackageList, depName);
+    return getCargoWorkspacePackageNameList(workspacePackageList, packageName);
   }
 
   // A single-package repository keeps overrides in the one `package.json` it has, where ownership already gives the
   // right answer, so they only expand once no package owns the manifest.
   if (!isOwned && ["overrides", "pnpm-workspace.overrides", "pnpm.overrides", "resolutions"].includes(depType)) {
-    return getOverridePackageNameList(workspacePackageList, depName);
+    return getOverridePackageNameList(workspacePackageList, packageName);
   }
 
   return null;
@@ -329,7 +344,7 @@ export const resolveUpgrades = async ({
       });
       const packageNameList = sharedPackageNameList ?? (owningPackageName === null ? [] : [owningPackageName]);
 
-      return [...new Set(packageNameList)].map((packageName) => ({ ...upgrade, packageName }));
+      return [...new Set(packageNameList)].map((changesetPackageName) => ({ ...upgrade, changesetPackageName }));
     }),
   );
 
