@@ -12,9 +12,6 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, onTes
 import {
   configureLogger,
   defaultTemplate,
-  getCargoWorkspacePackageNameList,
-  getCatalogPackageNameList,
-  getOverridePackageNameList,
   getSharedDeclarationPackageNameList,
   getUpgradeList,
   getWorkspacePackageList,
@@ -319,148 +316,6 @@ describe(resolvePackageName, () => {
   });
 });
 
-describe(getCatalogPackageNameList, () => {
-  const packageList = [
-    buildPackage("bare-default", { dependencies: { turbo: "catalog:" } }),
-    buildPackage("named-default", { devDependencies: { turbo: "catalog:default" } }),
-    buildPackage("shared-dev", { devDependencies: { turbo: "catalog:shared-dev" } }),
-    buildPackage("optional", { optionalDependencies: { turbo: "catalog:shared-dev" } }),
-    buildPackage("peer", { peerDependencies: { turbo: "catalog:shared-dev" } }),
-    buildPackage("pinned", { dependencies: { turbo: "2.10.10" } }),
-    buildPackage("unrelated", { dependencies: { other: "catalog:" } }),
-  ];
-
-  it("Matches a bare catalog: and catalog:default for the default catalog", () => {
-    expect.hasAssertions();
-
-    expect(getCatalogPackageNameList(packageList, "default", "turbo")).toStrictEqual(["bare-default", "named-default"]);
-  });
-
-  it("Matches a named catalog in every dependency group", () => {
-    expect.hasAssertions();
-
-    expect(getCatalogPackageNameList(packageList, "shared-dev", "turbo")).toStrictEqual([
-      "shared-dev",
-      "optional",
-      "peer",
-    ]);
-  });
-
-  it("Doesn't let a named catalog claim the packages on the default one", () => {
-    expect.hasAssertions();
-
-    expect(getCatalogPackageNameList(packageList, "react-19", "turbo")).toStrictEqual([]);
-  });
-
-  it("Ignores a package that pins the dependency itself", () => {
-    expect.hasAssertions();
-
-    expect(
-      getCatalogPackageNameList([buildPackage("pinned", { dependencies: { turbo: "2.10.10" } })], "default", "turbo"),
-    ).toStrictEqual([]);
-  });
-});
-
-describe(getOverridePackageNameList, () => {
-  it("Names only the packages that declare the dependency themselves", () => {
-    expect.hasAssertions();
-
-    const packageList = [
-      buildPackage("declares", { dependencies: { minimatch: "^10.0.0" } }),
-      buildPackage("declares-dev", { devDependencies: { minimatch: "^10.0.0" } }),
-      buildPackage("unrelated", { dependencies: { ky: "^3.0.0" } }),
-    ];
-
-    expect(getOverridePackageNameList(packageList, "minimatch")).toStrictEqual(["declares", "declares-dev"]);
-  });
-
-  it("Names nothing when the override pins something transitive", () => {
-    expect.hasAssertions();
-
-    expect(
-      getOverridePackageNameList([buildPackage("app", { dependencies: { ky: "^3.0.0" } })], "minimatch"),
-    ).toStrictEqual([]);
-  });
-});
-
-// Unreviewed
-const buildCargoWorkspacePackage = (directory: string, name: string): Package => ({
-  dir: path.join(directory, "packages", name),
-  packageJson: { name, version: "1.0.0" },
-  relativeDir: `packages/${name}`,
-});
-
-describe(getCargoWorkspacePackageNameList, () => {
-  it("Names the packages whose crate inherits the dependency from the workspace root", async () => {
-    expect.hasAssertions();
-
-    const directory = await createWorkspace({
-      "packages/dotted/Cargo.toml": '[package]\nname = "dotted"\n\n[dependencies]\nserde.workspace = true\n',
-      "packages/featured/Cargo.toml":
-        '[package]\nname = "featured"\n\n[dependencies]\nserde = { workspace = true, features = ["derive"] }\n',
-      "packages/inline/Cargo.toml": '[package]\nname = "inline"\n\n[dependencies]\nserde = { workspace = true }\n',
-      "packages/no-crate/package.json": '{ "name": "no-crate" }',
-      "packages/other-dep/Cargo.toml": '[package]\nname = "other-dep"\n\n[dependencies]\nclap.workspace = true\n',
-      "packages/pinned/Cargo.toml": '[package]\nname = "pinned"\n\n[dependencies]\nserde = "1.0.0"\n',
-      "packages/table/Cargo.toml": '[package]\nname = "table"\n\n[dependencies.serde]\nworkspace = true\n',
-    });
-
-    const packageList = ["inline", "dotted", "featured", "table", "pinned", "other-dep", "no-crate"].map((name) =>
-      buildCargoWorkspacePackage(directory, name),
-    );
-
-    await expect(getCargoWorkspacePackageNameList(packageList, "serde")).resolves.toStrictEqual([
-      "inline",
-      "dotted",
-      "featured",
-      "table",
-    ]);
-  });
-
-  it("Finds an inherited dependency in a dev, build, or per-platform table", async () => {
-    expect.hasAssertions();
-
-    const directory = await createWorkspace({
-      "packages/build/Cargo.toml": "[build-dependencies]\nserde.workspace = true\n",
-      "packages/dev/Cargo.toml": "[dev-dependencies]\nserde.workspace = true\n",
-      "packages/platform/Cargo.toml": "[target.'cfg(unix)'.dependencies]\nserde.workspace = true\n",
-    });
-
-    const packageList = ["dev", "build", "platform"].map((name) => buildCargoWorkspacePackage(directory, name));
-
-    await expect(getCargoWorkspacePackageNameList(packageList, "serde")).resolves.toStrictEqual([
-      "dev",
-      "build",
-      "platform",
-    ]);
-  });
-
-  it("Ignores a target table whose entry isn't a table at all", async () => {
-    expect.hasAssertions();
-
-    const directory = await createWorkspace({
-      "packages/heir/Cargo.toml":
-        "[package]\nname = \"heir\"\n\n[target.'cfg(unix)'.dependencies]\nserde.workspace = true\n",
-      // `[target]` holding a scalar is not a per-platform table, so there is nothing to read a dependency from.
-      "packages/scalar/Cargo.toml": '[package]\nname = "scalar"\n\n[target]\nnot-a-table = "x"\n',
-    });
-    const cargoPackageList = ["scalar", "heir"].map((name) => buildCargoWorkspacePackage(directory, name));
-
-    await expect(getCargoWorkspacePackageNameList(cargoPackageList, "serde")).resolves.toStrictEqual(["heir"]);
-  });
-
-  it("Reports which Cargo manifest failed to parse", async () => {
-    expect.hasAssertions();
-
-    const directory = await createWorkspace({ "packages/broken/Cargo.toml": "[dependencies\nserde = " });
-    const packageList = [buildCargoWorkspacePackage(directory, "broken")];
-
-    await expect(getCargoWorkspacePackageNameList(packageList, "serde")).rejects.toThrow(
-      /Couldn't parse .*Cargo\.toml/u,
-    );
-  });
-});
-
 describe(getSharedDeclarationPackageNameList, () => {
   const packageList = [
     buildPackage("catalogued", { dependencies: { turbo: "catalog:shared-dev" } }),
@@ -557,7 +412,18 @@ describe(getSharedDeclarationPackageNameList, () => {
       "packages/heir/Cargo.toml": '[package]\nname = "heir"\n\n[dependencies]\nserde.workspace = true\n',
       "packages/pinned/Cargo.toml": '[package]\nname = "pinned"\n\n[dependencies]\nserde = "1.0.0"\n',
     });
-    const cargoPackageList = ["heir", "pinned"].map((name) => buildCargoWorkspacePackage(directory, name));
+    const cargoPackageList: Package[] = [
+      {
+        dir: path.join(directory, "packages/heir"),
+        packageJson: { name: "heir", version: "1.0.0" },
+        relativeDir: "packages/heir",
+      },
+      {
+        dir: path.join(directory, "packages/pinned"),
+        packageJson: { name: "pinned", version: "1.0.0" },
+        relativeDir: "packages/pinned",
+      },
+    ];
 
     await expect(
       getSharedDeclarationPackageNameList({

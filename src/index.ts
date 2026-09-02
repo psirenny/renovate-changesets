@@ -7,11 +7,12 @@ import { shouldSkipPackage } from "@changesets/should-skip-package";
 import { configure, getLogger } from "@logtape/logtape";
 import { getPackages, type Package } from "@manypkg/get-packages";
 import Handlebars from "handlebars";
-import { parse as parseToml } from "smol-toml";
 import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
 
 import packageJson from "../package.json" with { type: "json" };
+import { getCargoWorkspacePackageNameList } from "./managers/cargo.js";
+import { getCatalogPackageNameList, getOverridePackageNameList } from "./managers/npm.js";
 import type { RenovateUpgrade } from "./typedefs.js";
 
 export type { RenovateUpdateType, RenovateUpgrade } from "./typedefs.js";
@@ -153,129 +154,6 @@ export const resolvePackageName = ({
       .toSorted((left, right) => right.dir.length - left.dir.length)
       .at(0)?.packageJson.name ?? null
   );
-};
-
-const cargoDependencySectionList = ["build-dependencies", "dependencies", "dev-dependencies"] as const;
-
-// A partial Cargo.toml manifest definition based on https://www.schemastore.org/cargo.json.
-type CargoDependency = string | { workspace?: boolean };
-type CargoDependencyTable = Record<string, CargoDependency>;
-type CargoPlatform = Partial<Record<(typeof cargoDependencySectionList)[number], CargoDependencyTable>>;
-type CargoManifest = CargoPlatform & { target?: Record<string, CargoPlatform> };
-
-// Unreviewed
-const readDependencyValue = (workspacePackage: Package, depName: string): string | null => {
-  for (const dependencyGroup of [
-    "dependencies",
-    "devDependencies",
-    "optionalDependencies",
-    "peerDependencies",
-  ] as const) {
-    const dependencyValue = workspacePackage.packageJson[dependencyGroup]?.[depName];
-
-    if (typeof dependencyValue === "string") {
-      return dependencyValue;
-    }
-  }
-
-  return null;
-};
-
-// Unreviewed
-/**
- * A package consumes a catalog entry when it points at that catalog by name. The default catalog answers to a bare
- * `catalog:` as well as to `catalog:default`, and a named catalog answers to neither.
- */
-const referencesCatalog = (dependencyValue: string | null, catalogName: string): boolean => {
-  if (dependencyValue === null) {
-    return false;
-  }
-
-  if (catalogName === "default") {
-    return dependencyValue === "catalog:" || dependencyValue === "catalog:default";
-  }
-
-  return dependencyValue === `catalog:${catalogName}`;
-};
-
-// Unreviewed
-/** Finds every package that draws the given dependency from the given catalog. */
-export const getCatalogPackageNameList = (
-  workspacePackageList: Package[],
-  catalogName: string,
-  depName: string,
-): string[] =>
-  workspacePackageList
-    .filter((workspacePackage) => referencesCatalog(readDependencyValue(workspacePackage, depName), catalogName))
-    .map((workspacePackage) => workspacePackage.packageJson.name);
-
-// Unreviewed
-/**
- * Finds every package that declares the overridden dependency directly. An override usually pins something transitive
- * that no package names, in which case this is empty and nothing is written.
- */
-export const getOverridePackageNameList = (workspacePackageList: Package[], depName: string): string[] =>
-  workspacePackageList
-    .filter((workspacePackage) => readDependencyValue(workspacePackage, depName) !== null)
-    .map((workspacePackage) => workspacePackage.packageJson.name);
-
-// Unreviewed
-/** Reads and parses a package's crate manifest, or `null` when the package isn't a crate at all. */
-const readCargoManifest = async (manifestFilePath: string): Promise<CargoManifest | null> => {
-  const content = await readFile(manifestFilePath, "utf8").catch(() => null);
-
-  if (content === null) {
-    return null;
-  }
-
-  try {
-    return parseToml(content);
-  } catch (error) {
-    throw new Error(`Couldn't parse ${manifestFilePath}.`, { cause: error });
-  }
-};
-
-// Unreviewed
-/** Collects a Cargo manifest's dependency tables, including the per-platform `[target.'cfg(…)'.dependencies]` ones. */
-const readCargoDependencyTableList = (manifest: CargoManifest): (CargoDependencyTable | undefined)[] => [
-  ...cargoDependencySectionList.map((sectionName) => manifest[sectionName]),
-  ...Object.values(manifest.target ?? {}).flatMap((platformSection) =>
-    cargoDependencySectionList.map((sectionName) => platformSection[sectionName]),
-  ),
-];
-
-// Unreviewed
-const inheritsCargoWorkspaceDependency = (manifest: CargoManifest, depName: string): boolean =>
-  readCargoDependencyTableList(manifest).some((table) => {
-    const entry = table?.[depName];
-
-    return typeof entry === "object" && entry.workspace === true;
-  });
-
-// Unreviewed
-/**
- * Finds every package whose crate inherits the dependency from the workspace root — a member writes `serde.workspace =
- * true` and the version lives in the root `Cargo.toml`. A crate is matched to a changeset-able package by looking for
- * `Cargo.toml` beside each package's `package.json`.
- */
-export const getCargoWorkspacePackageNameList = async (
-  workspacePackageList: Package[],
-  depName: string,
-): Promise<string[]> => {
-  const packageNameList = await Promise.all(
-    workspacePackageList.map(async (workspacePackage) => {
-      const manifestFilePath = path.join(workspacePackage.dir, "Cargo.toml");
-      const manifest = await readCargoManifest(manifestFilePath);
-
-      if (manifest === null || !inheritsCargoWorkspaceDependency(manifest, depName)) {
-        return null;
-      }
-
-      return workspacePackage.packageJson.name;
-    }),
-  );
-
-  return packageNameList.filter((packageName) => packageName !== null);
 };
 
 /**
