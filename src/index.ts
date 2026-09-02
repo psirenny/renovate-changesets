@@ -229,25 +229,6 @@ export const resolveUpgrades = async ({
   return resolvedUpgradeList.flat();
 };
 
-export const writeChangesets = async ({
-  cwd,
-  resolvedUpgradeList,
-  template,
-}: {
-  cwd: string;
-  resolvedUpgradeList: ResolvedRenovateUpgrade[];
-  template: string;
-}): Promise<void> => {
-  await Promise.all(
-    resolvedUpgradeList.map(async (resolvedUpgrade) => {
-      let content = Handlebars.compile(template, { noEscape: true, strict: true })(resolvedUpgrade);
-      content = `${content.replaceAll(/\n{3,}/gu, "\n\n").trim()}\n`;
-      const contentHash = createHash("sha256").update(content).digest("hex").slice(0, 8);
-      await writeFile(path.join(cwd, ".changeset", `renovate-${contentHash}.md`), content);
-    }),
-  );
-};
-
 export const run = async ({
   cwd,
   templateFilePath,
@@ -269,7 +250,14 @@ export const run = async ({
     workspacePackageList,
   });
 
-  await writeChangesets({ cwd, resolvedUpgradeList, template });
+  await Promise.all(
+    resolvedUpgradeList.map(async (resolvedUpgrade) => {
+      let content = Handlebars.compile(template, { noEscape: true, strict: true })(resolvedUpgrade);
+      content = `${content.replaceAll(/\n{3,}/gu, "\n\n").trim()}\n`;
+      const contentHash = createHash("sha256").update(content).digest("hex").slice(0, 8);
+      await writeFile(path.join(cwd, ".changeset", `renovate-${contentHash}.md`), content);
+    }),
+  );
 };
 
 export const main = async (argumentList: string[] = hideBin(process.argv)): Promise<number> => {
