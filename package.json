@@ -59,6 +59,7 @@
     "@changesets/should-skip-package": "^1.0.0",
     "@logtape/logtape": "^2.3.2",
     "@manypkg/get-packages": "^3.1.0",
+    "handlebars": "^4.7.9",
     "smol-toml": "^1.8.0",
     "yargs": "^18.1.0"
   },
@@ -89,7 +90,7 @@
     "@changesets/cli": "^3"
   },
   "engines": {
-    "node": "^22.11 || ^24 || >=26"
+    "node": "^24 || >=26"
   },
   "packageManager": "pnpm@11.23.0"
 }

@@ -7,26 +7,23 @@ import { fc, test as propertyTest } from "@fast-check/vitest";
 import { configure, getLogger, reset } from "@logtape/logtape";
 import { createLogRecorder } from "@logtape/testing/recorder";
 import type { Package } from "@manypkg/get-packages";
-import { afterAll, beforeAll, beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 
 import {
-  DEFAULT_TEMPLATE,
+  configureLogger,
+  defaultTemplate,
   getCargoWorkspacePackageNameList,
   getCatalogPackageNameList,
   getOverridePackageNameList,
-  getOwningPackageName,
   getSharedDeclarationPackageNameList,
-  configureLogging,
+  getUpgradeList,
   getWorkspacePackageList,
   main,
-  parseArguments,
-  parseUpdates,
-  renderChangeset,
+  resolvePackageName,
   run,
-  type RenovateUpdateType,
+  writeChangesets,
   type RenovateUpgrade,
-  type ResolvedUpdate,
-  type Update,
+  type ResolvedRenovateUpgrade,
 } from "./index.js";
 
 // Unreviewed
@@ -84,20 +81,18 @@ const buildPackage = (name: string, packageJson: Record<string, unknown> = {}): 
   relativeDir: `packages/${name}`,
 });
 
-// Unreviewed
-const parseOne = (upgrade: RenovateUpgrade): Update[] => parseUpdates(encodeUpgradeList([upgrade]));
-
 // This package's records go nowhere until something configures a sink, so the suite points the category at a recorder
 // and reads what a real run would have written to standard error.
 const recorder = createLogRecorder();
 
-describe(parseUpdates, () => {
+describe(getUpgradeList, () => {
   beforeAll(async () => {
     await configure({
       loggers: [
         // LogTape's own diagnostics get the recorder too, so a misconfigured suite surfaces instead of vanishing.
         { category: ["logtape", "meta"], lowestLevel: "error", sinks: ["recorder"] },
-        { category: "renovate-changesets", lowestLevel: "warning", sinks: ["recorder"] },
+        // The version-range skip logs at info, below what an entry point configures, so the recorder listens lower.
+        { category: "renovate-changesets", lowestLevel: "info", sinks: ["recorder"] },
       ],
       reset: true,
       sinks: { recorder: recorder.sink },
@@ -112,62 +107,25 @@ describe(parseUpdates, () => {
     await reset();
   });
 
-  it("Reads an empty payload as no updates", () => {
+  it("Passes a nameable upgrade through untouched", () => {
     expect.hasAssertions();
 
-    expect(parseUpdates("")).toStrictEqual([]);
-  });
+    const upgrade = {
+      currentValue: "^1.10.10",
+      currentVersion: "1.10.10",
+      datasource: "npm",
+      depName: "oxlint",
+      depType: "devDependencies",
+      displayFrom: "^1.10.10",
+      displayTo: "^2.10.11",
+      manager: "npm",
+      newValue: "^2.10.11",
+      newVersion: "2.10.11",
+      packageFile: "packages/example/package.json",
+      updateType: "minor",
+    } as const;
 
-  it("Throws when the payload isn't an array, because that means the consumer's template broke", () => {
-    expect.hasAssertions();
-
-    // `e30=` is base64 for `{}` — decodable JSON, but not the array Renovate is supposed to send. The shape is
-    // trusted rather than checked, so this surfaces as the array method being missing.
-    expect(() => parseUpdates("e30=")).toThrow(TypeError);
-    expect(() => parseUpdates("e30=")).toThrow(/is not a function/u);
-  });
-
-  it("Throws when the payload isn't decodable JSON", () => {
-    expect.hasAssertions();
-
-    expect(() => parseUpdates("not base64 encoded json")).toThrow(/JSON/u);
-  });
-
-  it("Carries every field a template might name", () => {
-    expect.hasAssertions();
-
-    expect(
-      parseOne({
-        currentValue: "^1.10.10",
-        currentVersion: "1.10.10",
-        datasource: "npm",
-        depName: "oxlint",
-        depType: "devDependencies",
-        manager: "npm",
-        newValue: "^2.10.11",
-        newVersion: "2.10.11",
-        packageFile: "packages/example/package.json",
-        updateType: "minor",
-      }),
-    ).toStrictEqual([
-      {
-        currentDigest: null,
-        currentValue: "^1.10.10",
-        currentVersion: "1.10.10",
-        datasource: "npm",
-        dependencyName: "oxlint",
-        dependencyType: "devDependencies",
-        fromVersion: "1.10.10",
-        manager: "npm",
-        manifestFilePath: "packages/example/package.json",
-        newDigest: null,
-        newName: null,
-        newValue: "^2.10.11",
-        newVersion: "2.10.11",
-        toVersion: "2.10.11",
-        updateType: "minor",
-      },
-    ]);
+    expect(getUpgradeList([upgrade])).toStrictEqual([upgrade]);
   });
 
   it("Skips an upgrade with no dependency name, which is what lockFileMaintenance sends", () => {
@@ -175,14 +133,14 @@ describe(parseUpdates, () => {
 
     const upgrade = { packageFile: "pnpm-lock.yaml", updateType: "lockFileMaintenance" } as const;
 
-    expect(parseOne(upgrade)).toStrictEqual([]);
+    expect(getUpgradeList([upgrade])).toStrictEqual([]);
     recorder.assertLogged({ level: "warning", message: /no dependency name or manifest path/u });
   });
 
   it("Skips an upgrade with no manifest path", () => {
     expect.hasAssertions();
 
-    expect(parseOne({ depName: "ky", newVersion: "3.0.0" })).toStrictEqual([]);
+    expect(getUpgradeList([{ depName: "ky", newVersion: "3.0.0" }])).toStrictEqual([]);
     recorder.assertLogged({ level: "warning", message: /no dependency name or manifest path/u });
   });
 
@@ -195,275 +153,45 @@ describe(parseUpdates, () => {
 
     const upgrade = { depName, newVersion: "1.0.0", packageFile: "package.json" } as const;
 
-    expect(parseOne(upgrade)).toStrictEqual([]);
-    recorder.assertLogged({ level: "warning", message: /version range rather than a dependency name/u });
+    expect(getUpgradeList([upgrade])).toStrictEqual([]);
+    recorder.assertLogged({ level: "info", message: /version range rather than a dependency name/u });
   });
 
-  it("Skips an upgrade Renovate reported with no version and no digest", () => {
+  it("Skips an upgrade whose displayTo is empty or missing, which has nothing to say", () => {
     expect.hasAssertions();
 
-    const upgrade = { depName: "ky", newValue: "^3.0.0", packageFile: "package.json", updateType: "patch" } as const;
-
-    expect(parseOne(upgrade)).toStrictEqual([]);
-    recorder.assertLogged({ level: "warning", message: /no version and no digest/u });
-  });
-
-  it("Names a replacement by its newValue, since Renovate sends it no newVersion", () => {
-    expect.hasAssertions();
-
-    const [update] = parseOne({
-      currentValue: "^2.0.2",
-      currentVersion: "2.0.2",
-      depName: "ky",
-      newName: "some-fork",
-      newValue: "3.0.0",
-      packageFile: "packages/app/package.json",
-      updateType: "replacement",
-    });
-
-    expect(update).toMatchObject({
-      dependencyName: "ky",
-      fromVersion: "2.0.2",
-      newName: "some-fork",
-      newValue: "3.0.0",
-      newVersion: null,
-      toVersion: "3.0.0",
-      updateType: "replacement",
-    });
-  });
-
-  it("Normalizes an isReplacement flag that arrived without an updateType", () => {
-    expect.hasAssertions();
-
-    const [update] = parseOne({
-      depName: "ky",
-      isReplacement: true,
-      newName: "some-fork",
-      newValue: "3.0.0",
-      packageFile: "packages/app/package.json",
-    });
-
-    expect(update?.updateType).toBe("replacement");
-    expect(update?.toVersion).toBe("3.0.0");
-  });
-
-  it("Never falls back to newValue outside a replacement, which would claim an update to the current version", () => {
-    expect.hasAssertions();
-
-    const upgrade = {
-      currentValue: "^2.0.2",
-      currentVersion: "2.0.2",
-      depName: "ky",
-      newValue: "^2.0.2",
-      packageFile: "packages/app/package.json",
-      updateType: "patch",
-    } as const;
-
-    expect(parseOne(upgrade)).toStrictEqual([]);
-    recorder.assertLogged({ level: "warning", message: /no version and no digest/u });
-  });
-
-  it("Lets a tag win over a digest when a version update changed both", () => {
-    expect.hasAssertions();
-
-    const [update] = parseOne({
-      currentDigest: "sha256:aaaaaaaaaaaaaaaa",
-      currentVersion: "1.0.0-rc.2",
-      depName: "rustfs/rustfs",
-      newDigest: "sha256:bbbbbbbbbbbbbbbb",
-      newVersion: "1.0.0-rc.3",
-      packageFile: "packages/rustfs/Dockerfile.musl",
-      updateType: "patch",
-    });
-
-    expect(update).toMatchObject({ fromVersion: "1.0.0-rc.2", toVersion: "1.0.0-rc.3" });
-  });
-
-  it("Lets the digest win on a digest update, where Renovate leaves the tag untouched", () => {
-    expect.hasAssertions();
-
-    const [update] = parseOne({
-      currentDigest: "sha256:032b412aaaaaaaaa",
-      currentVersion: "1.0.0",
-      depName: "timescaledb",
-      newDigest: "sha256:cf49c5dbbbbbbbbb",
-      newValue: "1.0.0",
-      newVersion: "1.0.0",
-      packageFile: "packages/martin/docker-compose.seed.yaml",
-      updateType: "digest",
-    });
-
-    expect(update).toMatchObject({ fromVersion: "sha256:032b412", toVersion: "sha256:cf49c5d" });
-  });
-
-  it("Names the tag it came from when pinning a digest for the first time", () => {
-    expect.hasAssertions();
-
-    const [update] = parseOne({
-      currentValue: "v7.0.1",
-      currentVersion: "7.0.1",
-      depName: "actions/checkout",
-      newDigest: "3d3c42e5aac5ba805825da76410c181273ba90b1",
-      newValue: "v7.0.1",
-      packageFile: ".github/workflows/ci.yaml",
-      updateType: "pinDigest",
-    });
-
-    expect(update).toMatchObject({ fromVersion: "7.0.1", toVersion: "3d3c42e" });
-  });
-
-  it("Keeps a rollback's update type so a template can phrase it differently", () => {
-    expect.hasAssertions();
-
-    const [update] = parseOne({
-      currentVersion: "2.10.11",
-      depName: "turbo",
-      newVersion: "2.10.10",
-      packageFile: "packages/app/package.json",
-      updateType: "rollback",
-    });
-
-    expect(update).toMatchObject({ fromVersion: "2.10.11", toVersion: "2.10.10", updateType: "rollback" });
+    expect(
+      getUpgradeList([
+        { depName: "ky", displayFrom: "", displayTo: "", packageFile: "package.json", updateType: "patch" },
+        { depName: "turbo", newValue: "^3.0.0", packageFile: "package.json", updateType: "patch" },
+      ]),
+    ).toStrictEqual([]);
+    recorder.assertLogged({ level: "warning", message: /empty displayTo/u });
   });
 
   it("Reads every upgrade in the payload", () => {
     expect.hasAssertions();
 
-    const updateList = parseUpdates(
-      encodeUpgradeList([
-        { depName: "a", newVersion: "1.0.0", packageFile: "packages/a/package.json" },
-        { depName: "b", newVersion: "2.0.0", packageFile: "packages/b/package.json" },
-      ]),
-    );
+    const upgradeList = getUpgradeList([
+      { depName: "a", displayTo: "1.0.0", packageFile: "packages/a/package.json" },
+      { depName: "b", displayTo: "2.0.0", packageFile: "packages/b/package.json" },
+    ]);
 
-    expect(updateList.map((update) => update.dependencyName)).toStrictEqual(["a", "b"]);
+    expect(upgradeList.map((upgrade) => upgrade.depName)).toStrictEqual(["a", "b"]);
   });
 });
 
-type DigestCase = { digest: string | null; label: string; shortened: string | null };
-
-const FROM_DIGEST_CASE_LIST: DigestCase[] = [
-  { digest: "sha256:0a1b2c3d4e5f60718293a4b5c6d7e8f9", label: "sha256", shortened: "sha256:0a1b2c3" },
-  { digest: "sha512:0a1b2c3d4e5f60718293a4b5c6d7e8f9", label: "sha512", shortened: "sha512:0a1b2c3" },
-  { digest: "0a1b2c3d4e5f60718293a4b5c6d7e8f9a0b1c2d3", label: "bare", shortened: "0a1b2c3" },
-  { digest: null, label: "none", shortened: null },
-];
-
-const TO_DIGEST_CASE_LIST: DigestCase[] = [
-  { digest: "sha256:9f8e7d6c5b4a30291817263544536271", label: "sha256", shortened: "sha256:9f8e7d6" },
-  { digest: "sha512:9f8e7d6c5b4a30291817263544536271", label: "sha512", shortened: "sha512:9f8e7d6" },
-  { digest: "9f8e7d6c5b4a302918172635445362719a8b7c6d", label: "bare", shortened: "9f8e7d6" },
-  { digest: null, label: "none", shortened: null },
-];
-
-const FROM_VERSION_CASE_LIST = [
-  { label: "version", version: "1.2.3" },
-  { label: "none", version: null },
-];
-
-const TO_VERSION_CASE_LIST = [
-  { label: "version", version: "4.5.6" },
-  { label: "none", version: null },
-];
-
-const UPDATE_TYPE_CASE_LIST: { isDigestUpdate: boolean; updateType: RenovateUpdateType }[] = [
-  { isDigestUpdate: false, updateType: "patch" },
-  { isDigestUpdate: true, updateType: "digest" },
-];
-
 // Unreviewed
-// Written as an explicit decision on the case labels rather than as a coalescing chain, so a change to the
-// implementation's precedence has to be justified against this rather than mirrored by it.
-const expectSide = (version: string | null, digest: DigestCase, isDigestUpdate: boolean): string | null => {
-  if (isDigestUpdate) {
-    if (digest.shortened !== null) {
-      return digest.shortened;
-    }
+/** Renders one changeset through `writeChangesets`, in a throwaway workspace, and reads back what it wrote. */
+const render = async (template: string, resolvedUpgrade: ResolvedRenovateUpgrade): Promise<string> => {
+  const directory = await createWorkspace({ ".changeset/.keep": "" });
 
-    return version;
-  }
+  await writeChangesets({ cwd: directory, resolvedUpgradeList: [resolvedUpgrade], template });
 
-  if (version !== null) {
-    return version;
-  }
+  const [changeset] = await readChangesetList(directory);
 
-  return digest.shortened;
+  return changeset?.content ?? "";
 };
-
-type SelectionCase = {
-  expectedFromVersion: string | null;
-  expectedToVersion: string | null;
-  label: string;
-  upgrade: RenovateUpgrade;
-};
-
-// Unreviewed
-/** The `{ fromVersion, toVersion }` pairs a case expects — none at all when the case selects no version. */
-const buildExpectedVersionPairList = (
-  selectionCase: SelectionCase,
-): { fromVersion: string | null; toVersion: string | null }[] =>
-  selectionCase.expectedToVersion === null
-    ? []
-    : [{ fromVersion: selectionCase.expectedFromVersion, toVersion: selectionCase.expectedToVersion }];
-
-// Unreviewed
-const buildCaseList = (): SelectionCase[] => {
-  const caseList: SelectionCase[] = [];
-
-  for (const { isDigestUpdate, updateType } of UPDATE_TYPE_CASE_LIST) {
-    for (const fromVersionCase of FROM_VERSION_CASE_LIST) {
-      for (const fromDigestCase of FROM_DIGEST_CASE_LIST) {
-        for (const toVersionCase of TO_VERSION_CASE_LIST) {
-          for (const toDigestCase of TO_DIGEST_CASE_LIST) {
-            caseList.push({
-              expectedFromVersion: expectSide(fromVersionCase.version, fromDigestCase, isDigestUpdate),
-              expectedToVersion: expectSide(toVersionCase.version, toDigestCase, isDigestUpdate),
-              label: [
-                updateType,
-                `from ${fromVersionCase.label}/${fromDigestCase.label}`,
-                `to ${toVersionCase.label}/${toDigestCase.label}`,
-              ].join(" "),
-              upgrade: {
-                currentDigest: fromDigestCase.digest,
-                currentVersion: fromVersionCase.version,
-                depName: "example",
-                newDigest: toDigestCase.digest,
-                newVersion: toVersionCase.version,
-                packageFile: "packages/example/package.json",
-                updateType,
-              },
-            });
-          }
-        }
-      }
-    }
-  }
-
-  return caseList;
-};
-
-const CASE_LIST = buildCaseList();
-
-describe("Version selection", () => {
-  it("Covers every combination of from side, to side, digest algorithm, and update type", () => {
-    expect.hasAssertions();
-
-    expect(CASE_LIST).toHaveLength(128);
-  });
-
-  it.each(CASE_LIST.map((selectionCase) => [selectionCase.label, selectionCase] as const))(
-    "Selects %s",
-    (_label, selectionCase) => {
-      expect.hasAssertions();
-
-      const updateList = parseUpdates(encodeUpgradeList([selectionCase.upgrade]));
-
-      expect(updateList.map(({ fromVersion, toVersion }) => ({ fromVersion, toVersion }))).toStrictEqual(
-        buildExpectedVersionPairList(selectionCase),
-      );
-    },
-  );
-});
 
 // Renovate reports `packageFile` relative to the repository root, which is what `ROOT_DIRECTORY` stands in for.
 const ROOT_DIRECTORY = path.resolve("/workspace");
@@ -483,29 +211,7 @@ const PACKAGE_LIST = [
 ];
 
 describe(getWorkspacePackageList, () => {
-  // The missing-config path logs, and a lazy log callback only runs when a sink is listening.
-  const configRecorder = createLogRecorder();
-
-  beforeAll(async () => {
-    await configure({
-      loggers: [
-        { category: ["logtape", "meta"], lowestLevel: "error", sinks: ["recorder"] },
-        { category: "renovate-changesets", lowestLevel: "warning", sinks: ["recorder"] },
-      ],
-      reset: true,
-      sinks: { recorder: configRecorder.sink },
-    });
-  });
-
-  beforeEach(() => {
-    configRecorder.clear();
-  });
-
-  afterAll(async () => {
-    await reset();
-  });
-
-  it("Falls back and says so when the repository has no Changesets config", async () => {
+  it("Fails when the repository has no Changesets config, which this tool exists to write for", async () => {
     expect.hasAssertions();
 
     const directory = await createWorkspace({
@@ -513,74 +219,64 @@ describe(getWorkspacePackageList, () => {
       "packages/app/package.json": '{ "name": "@fixture/app", "version": "1.0.0" }\n',
       "pnpm-workspace.yaml": "packages:\n  - packages/app\n",
     });
-    const packageList = await getWorkspacePackageList(directory);
 
-    expect(packageList.map((workspacePackage) => workspacePackage.packageJson.name)).toStrictEqual(["@fixture/app"]);
-    configRecorder.assertLogged({ level: "warning", message: /No \.changeset\/config\.json/u });
-  });
-
-  it("Rethrows when the config could not be read for any other reason", async () => {
-    expect.hasAssertions();
-
-    // A directory where the config file belongs rejects with EISDIR rather than ENOENT.
-    const directory = await createWorkspace({
-      ".changeset/config.json/placeholder": "",
-      "package.json": '{ "name": "solo", "version": "1.0.0" }\n',
-    });
-
-    await expect(getWorkspacePackageList(directory)).rejects.toThrow(/EISDIR|illegal operation on a directory/u);
+    await expect(getWorkspacePackageList(directory)).rejects.toThrow(/ENOENT.*config\.json/u);
   });
 });
 
-describe(getOwningPackageName, () => {
+// Unreviewed
+const resolveOwner = (packageFile: string, workspacePackageList: Package[] = PACKAGE_LIST): string | null =>
+  resolvePackageName({ cwd: ROOT_DIRECTORY, upgrade: { packageFile }, workspacePackageList });
+
+describe(resolvePackageName, () => {
   it("Gives a package its own manifest", () => {
     expect.hasAssertions();
 
-    expect(getOwningPackageName(PACKAGE_LIST, "packages/app/package.json", ROOT_DIRECTORY)).toBe("@fixture/app");
+    expect(resolveOwner("packages/app/package.json")).toBe("@fixture/app");
   });
 
   it("Gives a package a manifest nested inside it", () => {
     expect.hasAssertions();
 
-    expect(getOwningPackageName(PACKAGE_LIST, "packages/app/docker/docker-compose.yaml", ROOT_DIRECTORY)).toBe(
-      "@fixture/app",
-    );
+    expect(resolveOwner("packages/app/docker/docker-compose.yaml")).toBe("@fixture/app");
   });
 
   it("Gives a nested package its own manifests rather than the parent's", () => {
     expect.hasAssertions();
 
-    expect(getOwningPackageName(PACKAGE_LIST, "packages/parent/child/package.json", ROOT_DIRECTORY)).toBe(
-      "@fixture/child",
-    );
+    expect(resolveOwner("packages/parent/child/package.json")).toBe("@fixture/child");
   });
 
   it("Still gives the parent the manifests that aren't inside the nested package", () => {
     expect.hasAssertions();
 
-    expect(getOwningPackageName(PACKAGE_LIST, "packages/parent/Dockerfile", ROOT_DIRECTORY)).toBe("@fixture/parent");
+    expect(resolveOwner("packages/parent/Dockerfile")).toBe("@fixture/parent");
   });
 
   it("Doesn't let a sibling whose name shares a prefix claim the manifest", () => {
     expect.hasAssertions();
 
-    expect(getOwningPackageName(PACKAGE_LIST, "packages/app-extras/package.json", ROOT_DIRECTORY)).toBe(
-      "@fixture/app-extras",
-    );
+    expect(resolveOwner("packages/app-extras/package.json")).toBe("@fixture/app-extras");
   });
 
   it("Gives a repository-root manifest to nobody", () => {
     expect.hasAssertions();
 
-    expect(getOwningPackageName(PACKAGE_LIST, "mise.toml", ROOT_DIRECTORY)).toBeNull();
-    expect(getOwningPackageName(PACKAGE_LIST, "pnpm-workspace.yaml", ROOT_DIRECTORY)).toBeNull();
-    expect(getOwningPackageName(PACKAGE_LIST, ".github/workflows/ci.yaml", ROOT_DIRECTORY)).toBeNull();
+    expect(resolveOwner("mise.toml")).toBeNull();
+    expect(resolveOwner("pnpm-workspace.yaml")).toBeNull();
+    expect(resolveOwner(".github/workflows/ci.yaml")).toBeNull();
   });
 
   it("Gives a manifest in an unrelated directory to nobody", () => {
     expect.hasAssertions();
 
-    expect(getOwningPackageName(PACKAGE_LIST, "packages/not-a-package/package.json", ROOT_DIRECTORY)).toBeNull();
+    expect(resolveOwner("packages/not-a-package/package.json")).toBeNull();
+  });
+
+  it("Gives an upgrade with no manifest path to nobody", () => {
+    expect.hasAssertions();
+
+    expect(resolvePackageName({ cwd: ROOT_DIRECTORY, upgrade: {}, workspacePackageList: PACKAGE_LIST })).toBeNull();
   });
 
   it("Gives everything to the one package in a single-package repository", () => {
@@ -588,9 +284,9 @@ describe(getOwningPackageName, () => {
 
     const singlePackageList = [buildOwnedPackage(".", "solo")];
 
-    expect(getOwningPackageName(singlePackageList, "package.json", ROOT_DIRECTORY)).toBe("solo");
-    expect(getOwningPackageName(singlePackageList, "mise.toml", ROOT_DIRECTORY)).toBe("solo");
-    expect(getOwningPackageName(singlePackageList, "docker/Dockerfile", ROOT_DIRECTORY)).toBe("solo");
+    expect(resolveOwner("package.json", singlePackageList)).toBe("solo");
+    expect(resolveOwner("mise.toml", singlePackageList)).toBe("solo");
+    expect(resolveOwner("docker/Dockerfile", singlePackageList)).toBe("solo");
   });
 });
 
@@ -736,26 +432,6 @@ describe(getCargoWorkspacePackageNameList, () => {
   });
 });
 
-// Unreviewed
-const buildUpdate = (overrides: Partial<Update> = {}): Update => ({
-  currentDigest: null,
-  currentValue: null,
-  currentVersion: "2.10.10",
-  datasource: "npm",
-  dependencyName: "turbo",
-  dependencyType: null,
-  fromVersion: "2.10.10",
-  manager: "pnpm",
-  manifestFilePath: "pnpm-workspace.yaml",
-  newDigest: null,
-  newName: null,
-  newValue: "2.10.11",
-  newVersion: "2.10.11",
-  toVersion: "2.10.11",
-  updateType: "patch",
-  ...overrides,
-});
-
 describe(getSharedDeclarationPackageNameList, () => {
   const packageList = [
     buildPackage("catalogued", { dependencies: { turbo: "catalog:shared-dev" } }),
@@ -765,68 +441,84 @@ describe(getSharedDeclarationPackageNameList, () => {
   it("Expands a pnpm catalog to its consumers", async () => {
     expect.hasAssertions();
 
-    const update = buildUpdate({ dependencyType: "pnpm.catalog.shared-dev" });
-
-    await expect(getSharedDeclarationPackageNameList(update, packageList, { isOwned: false })).resolves.toStrictEqual([
-      "catalogued",
-    ]);
+    await expect(
+      getSharedDeclarationPackageNameList({
+        isOwned: false,
+        upgrade: { depName: "turbo", depType: "pnpm.catalog.shared-dev" },
+        workspacePackageList: packageList,
+      }),
+    ).resolves.toStrictEqual(["catalogued"]);
   });
 
   it("Expands a Yarn catalog the same way", async () => {
     expect.hasAssertions();
 
-    const update = buildUpdate({ dependencyType: "yarn.catalog.shared-dev", manifestFilePath: "package.json" });
-
-    await expect(getSharedDeclarationPackageNameList(update, packageList, { isOwned: false })).resolves.toStrictEqual([
-      "catalogued",
-    ]);
+    await expect(
+      getSharedDeclarationPackageNameList({
+        isOwned: false,
+        upgrade: { depName: "turbo", depType: "yarn.catalog.shared-dev" },
+        workspacePackageList: packageList,
+      }),
+    ).resolves.toStrictEqual(["catalogued"]);
   });
 
   it("Expands a catalog even when the root happens to be a workspace package", async () => {
     expect.hasAssertions();
 
-    const update = buildUpdate({ dependencyType: "pnpm.catalog.shared-dev" });
-
-    await expect(getSharedDeclarationPackageNameList(update, packageList, { isOwned: true })).resolves.toStrictEqual([
-      "catalogued",
-    ]);
+    await expect(
+      getSharedDeclarationPackageNameList({
+        isOwned: true,
+        upgrade: { depName: "turbo", depType: "pnpm.catalog.shared-dev" },
+        workspacePackageList: packageList,
+      }),
+    ).resolves.toStrictEqual(["catalogued"]);
   });
 
   it.each(["overrides", "pnpm.overrides", "pnpm-workspace.overrides", "resolutions"])(
     "Expands %s only when no package owns the manifest",
-    async (dependencyType) => {
+    async (depType) => {
       expect.hasAssertions();
 
-      const update = buildUpdate({ dependencyType, manifestFilePath: "package.json" });
-
       // Drawing a dependency from a catalog is still declaring it, so an override pinning it reaches both packages.
-      await expect(getSharedDeclarationPackageNameList(update, packageList, { isOwned: false })).resolves.toStrictEqual(
-        ["catalogued", "declares"],
-      );
-      await expect(getSharedDeclarationPackageNameList(update, packageList, { isOwned: true })).resolves.toBeNull();
+      await expect(
+        getSharedDeclarationPackageNameList({
+          isOwned: false,
+          upgrade: { depName: "turbo", depType },
+          workspacePackageList: packageList,
+        }),
+      ).resolves.toStrictEqual(["catalogued", "declares"]);
+      await expect(
+        getSharedDeclarationPackageNameList({
+          isOwned: true,
+          upgrade: { depName: "turbo", depType },
+          workspacePackageList: packageList,
+        }),
+      ).resolves.toBeNull();
     },
   );
 
   it("Leaves an override that pins something transitive to nobody", async () => {
     expect.hasAssertions();
 
-    const update = buildUpdate({
-      dependencyName: "minimatch",
-      dependencyType: "overrides",
-      manifestFilePath: "package.json",
-    });
-
-    await expect(getSharedDeclarationPackageNameList(update, packageList, { isOwned: false })).resolves.toStrictEqual(
-      [],
-    );
+    await expect(
+      getSharedDeclarationPackageNameList({
+        isOwned: false,
+        upgrade: { depName: "minimatch", depType: "overrides" },
+        workspacePackageList: packageList,
+      }),
+    ).resolves.toStrictEqual([]);
   });
 
   it("Leaves an ordinary dependency to ownership", async () => {
     expect.hasAssertions();
 
-    const update = buildUpdate({ dependencyType: "devDependencies", manifestFilePath: "packages/app/package.json" });
-
-    await expect(getSharedDeclarationPackageNameList(update, packageList, { isOwned: false })).resolves.toBeNull();
+    await expect(
+      getSharedDeclarationPackageNameList({
+        isOwned: false,
+        upgrade: { depName: "turbo", depType: "devDependencies" },
+        workspacePackageList: packageList,
+      }),
+    ).resolves.toBeNull();
   });
 
   it("Expands a Cargo workspace declaration to the crates that inherit it", async () => {
@@ -837,200 +529,277 @@ describe(getSharedDeclarationPackageNameList, () => {
       "packages/pinned/Cargo.toml": '[package]\nname = "pinned"\n\n[dependencies]\nserde = "1.0.0"\n',
     });
     const cargoPackageList = ["heir", "pinned"].map((name) => buildCargoWorkspacePackage(directory, name));
-    const update = buildUpdate({
-      dependencyName: "serde",
-      dependencyType: "workspace.dependencies",
-      manifestFilePath: "Cargo.toml",
-    });
 
     await expect(
-      getSharedDeclarationPackageNameList(update, cargoPackageList, { isOwned: false }),
+      getSharedDeclarationPackageNameList({
+        isOwned: false,
+        upgrade: { depName: "serde", depType: "workspace.dependencies" },
+        workspacePackageList: cargoPackageList,
+      }),
     ).resolves.toStrictEqual(["heir"]);
   });
 
-  it("Leaves an update with no dependency type to ownership", async () => {
+  it("Leaves an upgrade with no dependency type to ownership", async () => {
     expect.hasAssertions();
 
-    const update = buildUpdate({ dependencyType: null, manifestFilePath: "packages/app/Dockerfile" });
+    await expect(
+      getSharedDeclarationPackageNameList({
+        isOwned: false,
+        upgrade: { depName: "turbo" },
+        workspacePackageList: packageList,
+      }),
+    ).resolves.toBeNull();
+  });
 
-    await expect(getSharedDeclarationPackageNameList(update, packageList, { isOwned: false })).resolves.toBeNull();
+  it("Leaves an upgrade with no dependency name to ownership", async () => {
+    expect.hasAssertions();
+
+    await expect(
+      getSharedDeclarationPackageNameList({
+        isOwned: false,
+        upgrade: { depType: "pnpm.catalog.shared-dev" },
+        workspacePackageList: packageList,
+      }),
+    ).resolves.toBeNull();
   });
 });
 
 // Unreviewed
-const buildResolvedUpdate = (overrides: Partial<ResolvedUpdate> = {}): ResolvedUpdate => ({
+const buildResolvedUpgrade = (overrides: Partial<ResolvedRenovateUpgrade> = {}): ResolvedRenovateUpgrade => ({
   currentDigest: null,
   currentValue: "^2.0.2",
   currentVersion: "2.0.2",
   datasource: "npm",
-  dependencyName: "ky",
-  dependencyType: "dependencies",
-  fromVersion: "2.0.2",
+  depName: "ky",
+  depType: "dependencies",
+  displayFrom: "^2.0.2",
+  displayTo: "^3.0.0",
   manager: "npm",
-  manifestFilePath: "packages/app/package.json",
   newDigest: null,
   newName: null,
   newValue: "^3.0.0",
   newVersion: "3.0.0",
+  packageFile: "packages/app/package.json",
   packageName: "@fixture/app",
-  toVersion: "3.0.0",
   updateType: "major",
   ...overrides,
 });
 
 // Unreviewed
-const renderBody = (template: string, overrides: Partial<ResolvedUpdate> = {}): string =>
-  renderChangeset(template, buildResolvedUpdate(overrides));
+const renderBody = async (template: string, overrides: Partial<ResolvedRenovateUpgrade> = {}): Promise<string> =>
+  render(template, buildResolvedUpgrade(overrides));
 
-describe(renderChangeset, () => {
-  it("Interpolates a variable", () => {
+describe(writeChangesets, () => {
+  it("Interpolates a variable", async () => {
     expect.hasAssertions();
 
-    expect(renderBody("{{depName}} {{toVersion}}")).toBe("ky 3.0.0\n");
+    await expect(renderBody("{{depName}} {{displayTo}}")).resolves.toBe("ky ^3.0.0\n");
   });
 
-  it("Treats the triple-brace form as raw text, the same as the double-brace form", () => {
+  it("Treats the triple-brace form as raw text, the same as the double-brace form", async () => {
     expect.hasAssertions();
 
-    expect(renderBody("{{{depName}}} {{depName}}")).toBe("ky ky\n");
+    await expect(renderBody("{{{depName}}} {{depName}}")).resolves.toBe("ky ky\n");
   });
 
-  it("Tolerates whitespace inside an expression", () => {
+  it("Tolerates whitespace inside an expression", async () => {
     expect.hasAssertions();
 
-    expect(renderBody("{{ depName }}|{{#if  fromVersion }}yes{{ else }}no{{ /if }}")).toBe("ky|yes\n");
+    await expect(renderBody("{{ depName }}|{{#if  currentVersion }}yes{{ else }}no{{/if}}")).resolves.toBe("ky|yes\n");
   });
 
-  it("Renders a null value as nothing", () => {
+  it("Rejects a closing tag written with a space before the slash, as Renovate's own templates do", async () => {
     expect.hasAssertions();
 
-    expect(renderBody("[{{newName}}]")).toBe("[]\n");
+    await expect(renderBody("{{#if displayFrom}}x{{ /if }}")).rejects.toThrow(/Parse error on line 1/u);
   });
 
-  it("Renders a false flag as nothing", () => {
+  it("Ignores a comment", async () => {
     expect.hasAssertions();
 
-    expect(renderBody("[{{isReplacement}}]")).toBe("[]\n");
+    await expect(renderBody("{{! a note }}{{depName}}")).resolves.toBe("ky\n");
   });
 
-  it("Takes the consequent when the condition has a value", () => {
+  it("Rejects a partial, which has no file to resolve against", async () => {
     expect.hasAssertions();
 
-    expect(renderBody("{{#if fromVersion}}from {{fromVersion}}{{/if}}")).toBe("from 2.0.2\n");
+    await expect(renderBody("{{> shared}}")).rejects.toThrow(/partial shared could not be found/u);
   });
 
-  it("Takes the alternate when the condition is null", () => {
+  it("Renders a null value as nothing", async () => {
     expect.hasAssertions();
 
-    expect(renderBody("{{#if newName}}renamed{{else}}same name{{/if}}", { newName: null })).toBe("same name\n");
+    await expect(renderBody("[{{newName}}]")).resolves.toBe("[]\n");
   });
 
-  it("Treats an empty string as falsy", () => {
+  it("Renders a false flag as the word false, the way Renovate does — flags belong inside conditions", async () => {
     expect.hasAssertions();
 
-    expect(renderBody("{{#if currentValue}}has{{else}}none{{/if}}", { currentValue: "" })).toBe("none\n");
+    await expect(renderBody("[{{isReplacement}}]", { isReplacement: false })).resolves.toBe("[false]\n");
   });
 
-  it("Nests conditions", () => {
+  it("Takes the consequent when the condition has a value", async () => {
+    expect.hasAssertions();
+
+    await expect(renderBody("{{#if displayFrom}}from {{displayFrom}}{{/if}}")).resolves.toBe("from ^2.0.2\n");
+  });
+
+  it("Takes the alternate when Renovate defaulted the value to an empty string", async () => {
+    expect.hasAssertions();
+
+    await expect(renderBody("{{#if displayFrom}}yes{{else}}no{{/if}}", { displayFrom: "" })).resolves.toBe("no\n");
+  });
+
+  it("Takes the alternate when the condition is null", async () => {
+    expect.hasAssertions();
+
+    await expect(renderBody("{{#if newName}}renamed{{else}}same name{{/if}}", { newName: null })).resolves.toBe(
+      "same name\n",
+    );
+  });
+
+  it("Treats an empty string as falsy", async () => {
+    expect.hasAssertions();
+
+    await expect(renderBody("{{#if currentValue}}has{{else}}none{{/if}}", { currentValue: "" })).resolves.toBe(
+      "none\n",
+    );
+  });
+
+  it("Nests conditions", async () => {
     expect.hasAssertions();
 
     const template = "{{#if isReplacement}}A{{else}}{{#if isRollback}}B{{else}}C{{/if}}{{/if}}";
 
-    expect(renderBody(template, { updateType: "replacement" })).toBe("A\n");
-    expect(renderBody(template, { updateType: "rollback" })).toBe("B\n");
-    expect(renderBody(template, { updateType: "patch" })).toBe("C\n");
+    await expect(renderBody(template, { isReplacement: true })).resolves.toBe("A\n");
+    await expect(renderBody(template, { isRollback: true })).resolves.toBe("B\n");
+    await expect(renderBody(template)).resolves.toBe("C\n");
   });
 
-  it("Collapses the blank lines an untaken branch leaves behind", () => {
+  it("Leaves no blank lines behind where an untaken branch stood on its own line", async () => {
     expect.hasAssertions();
 
-    expect(renderBody("one\n{{#if newName}}\n\ntwo\n\n{{/if}}\nthree")).toBe("one\n\nthree\n");
+    await expect(renderBody("one\n{{#if newName}}\n\ntwo\n\n{{/if}}\nthree")).resolves.toBe("one\nthree\n");
   });
 
-  it("Ends the file with exactly one newline", () => {
+  it("Collapses the run of blank lines an untaken inline branch leaves behind", async () => {
     expect.hasAssertions();
 
-    expect(renderBody("body\n\n\n")).toBe("body\n");
-    expect(renderBody("body")).toBe("body\n");
+    // Handlebars only drops the line a block tag sits on by itself, so an inline branch leaves its surrounding blank
+    // lines in the output for this to collapse.
+    await expect(renderBody("one\n\n{{#if newName}}two{{/if}}\n\nthree")).resolves.toBe("one\n\nthree\n");
+    await expect(renderBody("a\n\n{{#if newName}}b{{/if}}\n{{#if newName}}c{{/if}}\n\nd")).resolves.toBe("a\n\nd\n");
   });
 
-  it("Rejects a variable that isn't a field of an update", () => {
+  it("Ends the file with exactly one newline", async () => {
     expect.hasAssertions();
 
-    expect(() => renderBody("{{newversion}}")).toThrow(/references \{\{newversion\}\}/u);
-    expect(() => renderBody("{{newversion}}")).toThrow(/Available: .*newVersion/u);
+    await expect(renderBody("body\n\n\n")).resolves.toBe("body\n");
+    await expect(renderBody("body")).resolves.toBe("body\n");
   });
 
-  it("Rejects a block helper other than if", () => {
+  it("Drops the blank lines a template starts with, so the frontmatter comes first", async () => {
     expect.hasAssertions();
 
-    expect(() => renderBody("{{#each upgrades}}x{{/each}}")).toThrow(/unsupported block expression/u);
+    await expect(renderBody("\n\nbody")).resolves.toBe("body\n");
   });
 
-  it("Rejects an unclosed condition", () => {
+  it("Throws for a field Renovate omitted, so a template guards an optional field with a condition", async () => {
     expect.hasAssertions();
 
-    expect(() => renderBody("{{#if fromVersion}}x")).toThrow(/never closes \{\{#if fromVersion\}\}/u);
+    await expect(render("{{currentDigest}}", { depName: "ky", packageName: "solo" })).rejects.toThrow(
+      /"currentDigest" not defined/u,
+    );
+    await expect(
+      render("{{#if currentDigest}}{{currentDigest}}{{else}}none{{/if}}", { depName: "ky", packageName: "solo" }),
+    ).resolves.toBe("none\n");
   });
 
-  it("Rejects a closing tag with no condition", () => {
+  it("Rejects a variable that isn't a field of an upgrade", async () => {
     expect.hasAssertions();
 
-    expect(() => renderBody("x{{/if}}")).toThrow(/\{\{\/if\}\} with no matching/u);
+    await expect(renderBody("{{newversion}}")).rejects.toThrow(/"newversion" not defined/u);
   });
 
-  it("Rejects an else with no condition", () => {
+  it("Reads a name no upgrade carries inside a condition as falsy, the way Renovate does", async () => {
     expect.hasAssertions();
 
-    expect(() => renderBody("x{{else}}y")).toThrow(/\{\{else\}\} with no matching/u);
+    await expect(renderBody("{{#if newversion}}yes{{else}}no{{/if}}")).resolves.toBe("no\n");
+  });
+
+  it("Renders nothing for a block helper with no data behind it", async () => {
+    expect.hasAssertions();
+
+    await expect(renderBody("{{#each upgrades}}x{{/each}}")).resolves.toBe("\n");
+  });
+
+  it("Rejects an unclosed condition", async () => {
+    expect.hasAssertions();
+
+    await expect(renderBody("{{#if displayFrom}}x")).rejects.toThrow(/Parse error on line 1/u);
+    await expect(renderBody("{{#if displayFrom}}x")).rejects.toThrow(/'OPEN_ENDBLOCK', got 'EOF'/u);
+  });
+
+  it("Rejects a closing tag with no condition", async () => {
+    expect.hasAssertions();
+
+    await expect(renderBody("x{{/if}}")).rejects.toThrow(/Parse error on line 1/u);
+  });
+
+  it("Rejects an else with no condition", async () => {
+    expect.hasAssertions();
+
+    await expect(renderBody("x{{else}}y")).rejects.toThrow(/Parse error on line 1/u);
   });
 });
 
 describe("Default template", () => {
-  it("Names both versions of an ordinary update", () => {
+  it("Names both display values of an ordinary update", async () => {
     expect.hasAssertions();
 
-    expect(renderChangeset(DEFAULT_TEMPLATE, buildResolvedUpdate())).toBe(
-      '---\n"@fixture/app": patch\n---\n\nUpdated ky from 2.0.2 to 3.0.0\n',
+    await expect(render(defaultTemplate, buildResolvedUpgrade())).resolves.toBe(
+      '---\n"@fixture/app": patch\n---\n\nUpdated ky from ^2.0.2 to ^3.0.0\n',
     );
   });
 
-  it("Omits the from side when Renovate reported no current version", () => {
+  it("Omits the from side when Renovate has nothing to display there", async () => {
     expect.hasAssertions();
 
-    expect(renderChangeset(DEFAULT_TEMPLATE, buildResolvedUpdate({ currentVersion: null, fromVersion: null }))).toBe(
-      '---\n"@fixture/app": patch\n---\n\nUpdated ky to 3.0.0\n',
+    await expect(render(defaultTemplate, buildResolvedUpgrade({ displayFrom: "" }))).resolves.toBe(
+      '---\n"@fixture/app": patch\n---\n\nUpdated ky to ^3.0.0\n',
     );
   });
 
-  it("Names the arriving dependency on a replacement", () => {
+  it("Names the arriving dependency on a replacement", async () => {
     expect.hasAssertions();
 
-    const content = renderChangeset(
-      DEFAULT_TEMPLATE,
-      buildResolvedUpdate({
+    const content = await render(
+      defaultTemplate,
+      buildResolvedUpgrade({
+        displayTo: "3.0.0",
+        isReplacement: true,
         newName: "some-fork",
         newValue: "3.0.0",
         newVersion: null,
-        toVersion: "3.0.0",
         updateType: "replacement",
       }),
     );
 
-    expect(content).toBe('---\n"@fixture/app": patch\n---\n\nReplaced ky 2.0.2 with some-fork 3.0.0\n');
+    expect(content).toBe('---\n"@fixture/app": patch\n---\n\nReplaced ky ^2.0.2 with some-fork 3.0.0\n');
   });
 
-  it("Doesn't read a rollback as an upgrade", () => {
+  it("Doesn't read a rollback as an upgrade", async () => {
     expect.hasAssertions();
 
-    const content = renderChangeset(
-      DEFAULT_TEMPLATE,
-      buildResolvedUpdate({
+    const content = await render(
+      defaultTemplate,
+      buildResolvedUpgrade({
         currentVersion: "2.10.11",
-        dependencyName: "turbo",
-        fromVersion: "2.10.11",
+        depName: "turbo",
+        displayFrom: "2.10.11",
+        displayTo: "2.10.10",
+        isRollback: true,
         newVersion: "2.10.10",
-        toVersion: "2.10.10",
         updateType: "rollback",
       }),
     );
@@ -1038,26 +807,24 @@ describe("Default template", () => {
     expect(content).toBe('---\n"@fixture/app": patch\n---\n\nRolled turbo back to 2.10.10\n');
   });
 
-  it("Names both digests on a digest update", () => {
+  it("Names both digests on a digest update", async () => {
     expect.hasAssertions();
 
-    const content = renderChangeset(
-      DEFAULT_TEMPLATE,
-      buildResolvedUpdate({
-        currentDigest: "sha256:032b412",
+    const content = await render(
+      defaultTemplate,
+      buildResolvedUpgrade({
+        currentDigest: "sha256:032b412aaaaaaaaa",
         currentVersion: null,
-        dependencyName: "timescaledb",
-        fromVersion: "sha256:032b412",
-        newDigest: "sha256:cf49c5d",
+        depName: "timescaledb",
+        displayFrom: "032b412",
+        displayTo: "cf49c5d",
+        newDigest: "sha256:cf49c5dbbbbbbbbb",
         newVersion: null,
-        toVersion: "sha256:cf49c5d",
         updateType: "digest",
       }),
     );
 
-    expect(content).toBe(
-      '---\n"@fixture/app": patch\n---\n\nUpdated timescaledb from sha256:032b412 to sha256:cf49c5d\n',
-    );
+    expect(content).toBe('---\n"@fixture/app": patch\n---\n\nUpdated timescaledb from 032b412 to cf49c5d\n');
   });
 });
 
@@ -1097,12 +864,12 @@ const createTemporaryWorkspace = async (fileMap: Record<string, string>): Promis
 };
 
 // Unreviewed
-const runIn = async (
-  directory: string,
-  upgradeList: RenovateUpgrade[],
-  environment: Record<string, string | undefined> = {},
-): Promise<string[]> => {
-  const filePathList = await run({ argumentList: [encodeUpgradeList(upgradeList)], directory, environment });
+const runIn = async (directory: string, upgradeList: RenovateUpgrade[]): Promise<string[]> => {
+  const filePathList = await run({
+    cwd: directory,
+    templateFilePath: undefined,
+    upgradeListString: encodeUpgradeList(upgradeList),
+  });
 
   return filePathList;
 };
@@ -1122,6 +889,8 @@ describe(run, () => {
         currentVersion: "1.10.10",
         depName: "oxlint",
         depType: "devDependencies",
+        displayFrom: "1.10.10",
+        displayTo: "2.10.11",
         newVersion: "2.10.11",
         packageFile: "packages/app/package.json",
         updateType: "major",
@@ -1146,10 +915,19 @@ describe(run, () => {
     });
 
     await runIn(directory, [
-      { currentVersion: "0.2.337", depName: "chainctl", newVersion: "0.2.338", packageFile: "mise.toml" },
+      {
+        currentVersion: "0.2.337",
+        depName: "chainctl",
+        displayFrom: "0.2.337",
+        displayTo: "0.2.338",
+        newVersion: "0.2.338",
+        packageFile: "mise.toml",
+      },
       {
         currentDigest: "sha256:aaaaaaabbbbbbb",
         depName: "actions/checkout",
+        displayFrom: "aaaaaaa",
+        displayTo: "ccccccc",
         newDigest: "sha256:cccccccddddddd",
         packageFile: ".github/workflows/ci.yaml",
         updateType: "digest",
@@ -1187,6 +965,8 @@ describe(run, () => {
         currentVersion: "2.10.10",
         depName: "turbo",
         depType: "pnpm.catalog.shared-dev",
+        displayFrom: "2.10.10",
+        displayTo: "2.10.11",
         newVersion: "2.10.11",
         packageFile: "pnpm-workspace.yaml",
         updateType: "patch",
@@ -1226,6 +1006,8 @@ describe(run, () => {
       ["ignored", "private", "public"].map((directoryName) => ({
         currentVersion: "1.0.0",
         depName: `dependency-${directoryName}`,
+        displayFrom: "1.0.0",
+        displayTo: "2.0.0",
         newVersion: "2.0.0",
         packageFile: `packages/${directoryName}/package.json`,
       })),
@@ -1251,7 +1033,9 @@ describe(run, () => {
       "pnpm-workspace.yaml": buildPnpmWorkspace(["packages/outer", "packages/outer/inner"]),
     });
 
-    await runIn(directory, [{ depName: "ky", newVersion: "2.0.0", packageFile: "packages/outer/inner/package.json" }]);
+    await runIn(directory, [
+      { depName: "ky", displayTo: "2.0.0", newVersion: "2.0.0", packageFile: "packages/outer/inner/package.json" },
+    ]);
 
     const changesetList = await readChangesetList(directory);
     const contentList = changesetList.map((changeset) => changeset.content);
@@ -1270,8 +1054,8 @@ describe(run, () => {
     });
 
     await runIn(directory, [
-      { depName: "ky", newVersion: "2.0.0", packageFile: "packages/outer/inner/package.json" },
-      { depName: "turbo", newVersion: "3.0.0", packageFile: "packages/outer/Dockerfile" },
+      { depName: "ky", displayTo: "2.0.0", newVersion: "2.0.0", packageFile: "packages/outer/inner/package.json" },
+      { depName: "turbo", displayTo: "3.0.0", newVersion: "3.0.0", packageFile: "packages/outer/Dockerfile" },
     ]);
 
     const changesetList = await readChangesetList(directory);
@@ -1291,8 +1075,22 @@ describe(run, () => {
     });
 
     await runIn(directory, [
-      { currentVersion: "1.0.0", depName: "ky", newVersion: "2.0.0", packageFile: "package.json" },
-      { currentVersion: "24.0.0", depName: "node", newVersion: "24.1.0", packageFile: "mise.toml" },
+      {
+        currentVersion: "1.0.0",
+        depName: "ky",
+        displayFrom: "1.0.0",
+        displayTo: "2.0.0",
+        newVersion: "2.0.0",
+        packageFile: "package.json",
+      },
+      {
+        currentVersion: "24.0.0",
+        depName: "node",
+        displayFrom: "24.0.0",
+        displayTo: "24.1.0",
+        newVersion: "24.1.0",
+        packageFile: "mise.toml",
+      },
     ]);
 
     const changesetList = await readChangesetList(directory);
@@ -1325,7 +1123,14 @@ describe(run, () => {
     });
 
     await runIn(directory, [
-      { currentVersion: "1.0.0", depName: "ky", newVersion: "2.0.0", packageFile: "packages/app/package.json" },
+      {
+        currentVersion: "1.0.0",
+        depName: "ky",
+        displayFrom: "1.0.0",
+        displayTo: "2.0.0",
+        newVersion: "2.0.0",
+        packageFile: "packages/app/package.json",
+      },
     ]);
 
     const changesetList = await readChangesetList(directory);
@@ -1357,6 +1162,8 @@ describe(run, () => {
         currentVersion: "2.10.10",
         depName: "turbo",
         depType: "yarn.catalog.shared-dev",
+        displayFrom: "2.10.10",
+        displayTo: "2.10.11",
         newVersion: "2.10.11",
         packageFile: "package.json",
         updateType: "patch",
@@ -1369,33 +1176,20 @@ describe(run, () => {
     expect(contentList).toStrictEqual(['---\n"@fixture/app": patch\n---\n\nUpdated turbo from 2.10.10 to 2.10.11\n']);
   });
 
-  it("Uses a template the repository ships at the default path", async () => {
+  it("Uses a template the options point at", async () => {
     expect.hasAssertions();
 
     const directory = await createTemporaryWorkspace({
-      ".changeset/.renovate-changesets.md":
-        '---\n"{{packageName}}": minor\n---\n\nBumped {{depName}} to {{toVersion}}\n',
+      ".github/changeset.md": '---\n"{{packageName}}": patch\n---\n\n{{depName}}@{{displayTo}}\n',
       "package.json": serializePackageJson({ name: "solo", version: "1.0.0" }),
     });
 
-    await runIn(directory, [{ depName: "ky", newVersion: "2.0.0", packageFile: "package.json" }]);
-
-    const changesetList = await readChangesetList(directory);
-    const contentList = changesetList.map((changeset) => changeset.content);
-
-    expect(contentList).toStrictEqual(['---\n"solo": minor\n---\n\nBumped ky to 2.0.0\n']);
-  });
-
-  it("Uses a template pointed at by RENOVATE_CHANGESETS_TEMPLATE_FILE", async () => {
-    expect.hasAssertions();
-
-    const directory = await createTemporaryWorkspace({
-      ".github/changeset.md": '---\n"{{packageName}}": patch\n---\n\n{{depName}}@{{toVersion}}\n',
-      "package.json": serializePackageJson({ name: "solo", version: "1.0.0" }),
-    });
-
-    await runIn(directory, [{ depName: "ky", newVersion: "2.0.0", packageFile: "package.json" }], {
-      RENOVATE_CHANGESETS_TEMPLATE_FILE: ".github/changeset.md",
+    await run({
+      cwd: directory,
+      templateFilePath: ".github/changeset.md",
+      upgradeListString: encodeUpgradeList([
+        { depName: "ky", displayTo: "2.0.0", newVersion: "2.0.0", packageFile: "package.json" },
+      ]),
     });
 
     const changesetList = await readChangesetList(directory);
@@ -1412,29 +1206,14 @@ describe(run, () => {
     });
 
     await expect(
-      runIn(directory, [{ depName: "ky", newVersion: "2.0.0", packageFile: "package.json" }], {
-        RENOVATE_CHANGESETS_TEMPLATE_FILE: ".github/missing.md",
+      run({
+        cwd: directory,
+        templateFilePath: ".github/missing.md",
+        upgradeListString: encodeUpgradeList([
+          { depName: "ky", displayTo: "2.0.0", newVersion: "2.0.0", packageFile: "package.json" },
+        ]),
       }),
-    ).rejects.toThrow(/Couldn't read the changeset template/u);
-  });
-
-  it("Reads the repository named by RENOVATE_CHANGESETS_CWD rather than the working directory", async () => {
-    expect.hasAssertions();
-
-    const directory = await createTemporaryWorkspace({
-      "package.json": serializePackageJson({ name: "root", private: true, version: "0.0.0" }),
-      "packages/app/package.json": serializePackageJson({ name: "@fixture/app", version: "1.0.0" }),
-      "pnpm-workspace.yaml": buildPnpmWorkspace(["packages/app"]),
-    });
-
-    await runIn(process.cwd(), [{ depName: "ky", newVersion: "2.0.0", packageFile: "packages/app/package.json" }], {
-      RENOVATE_CHANGESETS_CWD: directory,
-    });
-
-    const changesetList = await readChangesetList(directory);
-    const contentList = changesetList.map((changeset) => changeset.content);
-
-    expect(contentList).toStrictEqual(['---\n"@fixture/app": patch\n---\n\nUpdated ky to 2.0.0\n']);
+    ).rejects.toThrow(/ENOENT.*missing\.md/u);
   });
 
   it("Overwrites its own files on a rebase rather than accumulating a second set", async () => {
@@ -1444,8 +1223,22 @@ describe(run, () => {
       "package.json": serializePackageJson({ name: "solo", version: "1.0.0" }),
     });
     const upgradeList: RenovateUpgrade[] = [
-      { currentVersion: "1.0.0", depName: "ky", newVersion: "2.0.0", packageFile: "package.json" },
-      { currentVersion: "1.0.0", depName: "turbo", newVersion: "2.0.0", packageFile: "package.json" },
+      {
+        currentVersion: "1.0.0",
+        depName: "ky",
+        displayFrom: "1.0.0",
+        displayTo: "2.0.0",
+        newVersion: "2.0.0",
+        packageFile: "package.json",
+      },
+      {
+        currentVersion: "1.0.0",
+        depName: "turbo",
+        displayFrom: "1.0.0",
+        displayTo: "2.0.0",
+        newVersion: "2.0.0",
+        packageFile: "package.json",
+      },
     ];
 
     const firstFilePathList = await runIn(directory, upgradeList);
@@ -1462,7 +1255,7 @@ describe(run, () => {
       "package.json": serializePackageJson({ name: "solo", version: "1.0.0" }),
     });
 
-    await runIn(directory, [{ depName: "ky", newVersion: "2.0.0", packageFile: "package.json" }]);
+    await runIn(directory, [{ depName: "ky", displayTo: "2.0.0", newVersion: "2.0.0", packageFile: "package.json" }]);
 
     for (const { content, fileName } of await readChangesetList(directory)) {
       const hash = createHash("sha256").update(content).digest("hex").slice(0, 8);
@@ -1471,26 +1264,41 @@ describe(run, () => {
     }
   });
 
-  it("Writes nothing when the command line asked for something yargs answers itself", async () => {
+  it("Fails on an empty payload rather than silently writing nothing", async () => {
     expect.hasAssertions();
 
     const directory = await createTemporaryWorkspace({
       "package.json": serializePackageJson({ name: "solo", version: "1.0.0" }),
     });
 
-    await expect(run({ argumentList: ["--help"], directory, environment: {} })).resolves.toStrictEqual([]);
+    await expect(run({ cwd: directory, templateFilePath: undefined, upgradeListString: "" })).rejects.toThrow(/JSON/u);
     await expect(readChangesetList(directory)).resolves.toStrictEqual([]);
   });
 
-  it("Writes nothing for an empty payload", async () => {
+  it("Throws when the payload isn't an array, because that means the consumer's template broke", async () => {
     expect.hasAssertions();
 
     const directory = await createTemporaryWorkspace({
       "package.json": serializePackageJson({ name: "solo", version: "1.0.0" }),
     });
 
-    await expect(run({ argumentList: [], directory, environment: {} })).resolves.toStrictEqual([]);
-    await expect(readChangesetList(directory)).resolves.toStrictEqual([]);
+    // `e30=` is base64 for `{}` — decodable JSON, but not the array Renovate is supposed to send. The shape is
+    // trusted rather than checked, so this surfaces as the array method being missing.
+    await expect(run({ cwd: directory, templateFilePath: undefined, upgradeListString: "e30=" })).rejects.toThrow(
+      /is not a function/u,
+    );
+  });
+
+  it("Throws when the payload isn't decodable JSON", async () => {
+    expect.hasAssertions();
+
+    const directory = await createTemporaryWorkspace({
+      "package.json": serializePackageJson({ name: "solo", version: "1.0.0" }),
+    });
+
+    await expect(
+      run({ cwd: directory, templateFilePath: undefined, upgradeListString: "not base64 encoded json" }),
+    ).rejects.toThrow(/JSON/u);
   });
 
   it("Reports an invalid Changesets config rather than writing against it", async () => {
@@ -1502,11 +1310,11 @@ describe(run, () => {
     });
 
     await expect(
-      runIn(directory, [{ depName: "ky", newVersion: "2.0.0", packageFile: "package.json" }]),
+      runIn(directory, [{ depName: "ky", displayTo: "2.0.0", newVersion: "2.0.0", packageFile: "package.json" }]),
     ).rejects.toThrow(/config\.json is invalid/u);
   });
 
-  it("Writes for a repository that has no Changesets config at all", async () => {
+  it("Fails for a repository that has no Changesets config at all", async () => {
     expect.hasAssertions();
 
     const directory = await createWorkspace({
@@ -1516,28 +1324,22 @@ describe(run, () => {
       "pnpm-workspace.yaml": buildPnpmWorkspace(["packages/app"]),
     });
 
-    await runIn(directory, [
-      { depName: "ky", newVersion: "3.0.0", packageFile: "packages/app/package.json", updateType: "major" },
-    ]);
-
-    const [changeset] = await readChangesetList(directory);
-
-    expect(changeset?.content).toBe('---\n"@fixture/app": patch\n---\n\nUpdated ky to 3.0.0\n');
+    await expect(
+      runIn(directory, [
+        {
+          depName: "ky",
+          displayTo: "3.0.0",
+          newVersion: "3.0.0",
+          packageFile: "packages/app/package.json",
+          updateType: "major",
+        },
+      ]),
+    ).rejects.toThrow(/ENOENT.*config\.json/u);
+    await expect(readChangesetList(directory)).resolves.toStrictEqual([]);
   });
 });
 
-// Unreviewed
-/** Parses a command line against a repository root that is never read, for the cases that only inspect the options. */
-const parse = async (
-  argumentList: string[],
-  environment: Record<string, string | undefined> = {},
-): ReturnType<typeof parseArguments> => {
-  const parsedArguments = await parseArguments({ argumentList, directory: "/repository", environment });
-
-  return parsedArguments;
-};
-
-describe(configureLogging, () => {
+describe(configureLogger, () => {
   afterAll(async () => {
     await reset();
   });
@@ -1554,7 +1356,7 @@ describe(configureLogging, () => {
     });
 
     try {
-      await configureLogging();
+      await configureLogger();
       getLogger(["renovate-changesets"]).warning((format) => format`Something worth saying`);
     } finally {
       spy.mockRestore();
@@ -1582,6 +1384,10 @@ describe(main, () => {
     mainRecorder.clear();
   });
 
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   afterAll(async () => {
     await reset();
   });
@@ -1592,10 +1398,22 @@ describe(main, () => {
     const directory = await createTemporaryWorkspace({
       "package.json": '{ "name": "solo", "version": "1.0.0" }\n',
     });
-    const upgradeList = [{ depName: "ky", newVersion: "2.0.0", packageFile: "package.json" }];
+    const upgradeList = [{ depName: "ky", displayTo: "2.0.0", newVersion: "2.0.0", packageFile: "package.json" }];
 
-    await expect(main({ argumentList: [encodeUpgradeList(upgradeList)], directory, environment: {} })).resolves.toBe(0);
+    await expect(main([encodeUpgradeList(upgradeList), "--cwd", directory])).resolves.toBe(0);
     await expect(readChangesetList(directory)).resolves.toHaveLength(1);
+  });
+
+  it("Reports a missing payload as a failure, since Renovate always sends one", async () => {
+    expect.hasAssertions();
+
+    const directory = await createTemporaryWorkspace({
+      "package.json": '{ "name": "solo", "version": "1.0.0" }\n',
+    });
+
+    await expect(main(["--cwd", directory])).resolves.toBe(1);
+    mainRecorder.assertLogged({ level: "error", message: /JSON/u });
+    await expect(readChangesetList(directory)).resolves.toStrictEqual([]);
   });
 
   it("Reports a failure as an exit code of one, with the reason on the logger", async () => {
@@ -1606,67 +1424,68 @@ describe(main, () => {
     });
 
     // `e30=` is base64 for `{}` — decodable JSON, but not the array Renovate is supposed to send.
-    await expect(main({ argumentList: ["e30="], directory, environment: {} })).resolves.toBe(1);
+    await expect(main(["e30=", "--cwd", directory])).resolves.toBe(1);
     mainRecorder.assertLogged({ level: "error", message: /is not a function/u });
-  });
-});
-
-describe("Command line", () => {
-  it("Falls back to the working directory and no template of its own", async () => {
-    expect.hasAssertions();
-
-    await expect(parse([])).resolves.toStrictEqual({
-      encodedUpdates: "",
-      templateFilePath: undefined,
-      workingDirectory: "/repository",
-    });
-  });
-
-  it("Reads Renovate's payload from the one positional argument", async () => {
-    expect.hasAssertions();
-
-    const encodedUpdates = encodeUpgradeList([{ depName: "ky", newVersion: "2.0.0", packageFile: "package.json" }]);
-
-    await expect(parse([encodedUpdates])).resolves.toMatchObject({ encodedUpdates });
   });
 
   it("Takes every option from a flag", async () => {
     expect.hasAssertions();
 
-    await expect(parse(["--cwd", "/elsewhere", "--template-file", ".github/changeset.md"])).resolves.toStrictEqual({
-      encodedUpdates: "",
-      templateFilePath: ".github/changeset.md",
-      workingDirectory: "/elsewhere",
+    const directory = await createTemporaryWorkspace({
+      ".github/changeset.md": '---\n"{{packageName}}": patch\n---\n\n{{depName}}@{{displayTo}}\n',
+      "package.json": '{ "name": "solo", "version": "1.0.0" }\n',
     });
+    const payload = encodeUpgradeList([
+      { depName: "ky", displayTo: "2.0.0", newVersion: "2.0.0", packageFile: "package.json" },
+    ]);
+
+    await expect(main([payload, "--cwd", directory, "--template-file-path", ".github/changeset.md"])).resolves.toBe(0);
+
+    const changesetList = await readChangesetList(directory);
+
+    expect(changesetList.map((changeset) => changeset.content)).toStrictEqual([
+      '---\n"solo": patch\n---\n\nky@2.0.0\n',
+    ]);
   });
 
   it("Takes every option from the environment when no flag names it", async () => {
     expect.hasAssertions();
 
-    await expect(
-      parse([], {
-        RENOVATE_CHANGESETS_CWD: "/elsewhere",
-        RENOVATE_CHANGESETS_TEMPLATE_FILE: ".github/changeset.md",
-      }),
-    ).resolves.toStrictEqual({
-      encodedUpdates: "",
-      templateFilePath: ".github/changeset.md",
-      workingDirectory: "/elsewhere",
+    const directory = await createTemporaryWorkspace({
+      ".github/changeset.md": '---\n"{{packageName}}": patch\n---\n\n{{depName}}@{{displayTo}}\n',
+      "package.json": '{ "name": "solo", "version": "1.0.0" }\n',
     });
+    const payload = encodeUpgradeList([
+      { depName: "ky", displayTo: "2.0.0", newVersion: "2.0.0", packageFile: "package.json" },
+    ]);
+
+    vi.stubEnv("RENOVATE_CHANGESETS_CWD", directory);
+    vi.stubEnv("RENOVATE_CHANGESETS_TEMPLATE_FILE_PATH", ".github/changeset.md");
+
+    await expect(main([payload])).resolves.toBe(0);
+
+    const changesetList = await readChangesetList(directory);
+
+    expect(changesetList.map((changeset) => changeset.content)).toStrictEqual([
+      '---\n"solo": patch\n---\n\nky@2.0.0\n',
+    ]);
   });
 
   it("Lets a flag win over the environment", async () => {
     expect.hasAssertions();
 
-    await expect(parse(["--cwd", "/flag"], { RENOVATE_CHANGESETS_CWD: "/environment" })).resolves.toMatchObject({
-      workingDirectory: "/flag",
+    const directory = await createTemporaryWorkspace({
+      "package.json": '{ "name": "solo", "version": "1.0.0" }\n',
     });
-  });
+    const payload = encodeUpgradeList([
+      { depName: "ky", displayTo: "2.0.0", newVersion: "2.0.0", packageFile: "package.json" },
+    ]);
 
-  it("Treats an empty value as unset", async () => {
-    expect.hasAssertions();
+    // The environment points somewhere that would fail, so the run only succeeds if the flag wins.
+    vi.stubEnv("RENOVATE_CHANGESETS_CWD", path.join(directory, "does-not-exist"));
 
-    await expect(parse(["--cwd", ""])).resolves.toMatchObject({ workingDirectory: "/repository" });
+    await expect(main([payload, "--cwd", directory])).resolves.toBe(0);
+    await expect(readChangesetList(directory)).resolves.toHaveLength(1);
   });
 
   it("Asks for nothing once it has printed help", async () => {
@@ -1675,8 +1494,8 @@ describe("Command line", () => {
     const spy = vi.spyOn(console, "log").mockReturnValue();
 
     try {
-      await expect(parse(["--help"])).resolves.toBeUndefined();
-      expect(spy.mock.calls.flat().join("\n")).toMatch(/renovate-changesets \[updates\]/u);
+      await expect(main(["--help"])).resolves.toBe(0);
+      expect(spy.mock.calls.flat().join("\n")).toMatch(/renovate-changesets \[upgradeListString\]/u);
     } finally {
       spy.mockRestore();
     }
@@ -1688,7 +1507,7 @@ describe("Command line", () => {
     const spy = vi.spyOn(console, "log").mockReturnValue();
 
     try {
-      await expect(parse(["--version"])).resolves.toBeUndefined();
+      await expect(main(["--version"])).resolves.toBe(0);
       expect(spy).toHaveBeenCalledWith(expect.stringMatching(/^\d+\.\d+\.\d+/u));
     } finally {
       spy.mockRestore();
@@ -1698,62 +1517,15 @@ describe("Command line", () => {
   it("Rejects a flag it doesn't know rather than ignoring it", async () => {
     expect.hasAssertions();
 
-    await expect(parse(["--cwdd", "/elsewhere"])).rejects.toThrow(/Unknown argument: cwdd/u);
+    await expect(main(["--cwdd", "/elsewhere"])).resolves.toBe(1);
+    mainRecorder.assertLogged({ level: "error", message: /Unknown argument/u });
   });
 
   it("Rejects a second positional argument", async () => {
     expect.hasAssertions();
 
-    await expect(parse(["one", "two"])).rejects.toThrow(/Unknown argument: two/u);
-  });
-
-  it("Uses a template a flag points at", async () => {
-    expect.hasAssertions();
-
-    const directory = await createTemporaryWorkspace({
-      ".github/changeset.md": '---\n"{{packageName}}": patch\n---\n\n{{depName}}@{{toVersion}}\n',
-      "package.json": serializePackageJson({ name: "solo", version: "1.0.0" }),
-    });
-
-    await run({
-      argumentList: [
-        encodeUpgradeList([{ depName: "ky", newVersion: "2.0.0", packageFile: "package.json" }]),
-        "--template-file",
-        ".github/changeset.md",
-      ],
-      directory,
-      environment: {},
-    });
-
-    const changesetList = await readChangesetList(directory);
-
-    expect(changesetList.map((changeset) => changeset.content)).toStrictEqual([
-      '---\n"solo": patch\n---\n\nky@2.0.0\n',
-    ]);
-  });
-
-  it("Reads the repository a --cwd flag names rather than the working directory", async () => {
-    expect.hasAssertions();
-
-    const directory = await createTemporaryWorkspace({
-      "package.json": serializePackageJson({ name: "solo", version: "1.0.0" }),
-    });
-
-    await run({
-      argumentList: [
-        encodeUpgradeList([{ depName: "ky", newVersion: "2.0.0", packageFile: "package.json" }]),
-        "--cwd",
-        directory,
-      ],
-      directory: process.cwd(),
-      environment: {},
-    });
-
-    const changesetList = await readChangesetList(directory);
-
-    expect(changesetList.map((changeset) => changeset.content)).toStrictEqual([
-      '---\n"solo": patch\n---\n\nUpdated ky to 2.0.0\n',
-    ]);
+    await expect(main(["one", "two"])).resolves.toBe(1);
+    mainRecorder.assertLogged({ level: "error", message: /Unknown argument/u });
   });
 });
 
@@ -1992,16 +1764,27 @@ const buildUpgradeList = (fixture: FixtureWorkspace): RenovateUpgrade[] => [
     currentVersion: `${index + 1}.0.0`,
     depName: `dependency-${index}`,
     depType: fixturePackage.dependencyGroup,
+    displayFrom: `${index + 1}.0.0`,
+    displayTo: `${index + 1}.1.0`,
     newVersion: `${index + 1}.1.0`,
     packageFile: `${fixturePackage.directoryPath}/package.json`,
     updateType: "minor" as const,
   })),
   // A manifest at the repository root, owned by no package.
-  { currentVersion: "0.2.337", depName: "chainctl", newVersion: "0.2.338", packageFile: "mise.toml" },
+  {
+    currentVersion: "0.2.337",
+    depName: "chainctl",
+    displayFrom: "0.2.337",
+    displayTo: "0.2.338",
+    newVersion: "0.2.338",
+    packageFile: "mise.toml",
+  },
   // A manifest in a directory that isn't a package at all.
   {
     currentVersion: "1.0.0",
     depName: "stray-dependency",
+    displayFrom: "1.0.0",
+    displayTo: "1.1.0",
     newVersion: "1.1.0",
     packageFile: "packages/not-a-package/package.json",
   },
@@ -2010,6 +1793,8 @@ const buildUpgradeList = (fixture: FixtureWorkspace): RenovateUpgrade[] => [
     currentVersion: `10.${index}.0`,
     depName: CATALOG_DEPENDENCY_NAME,
     depType: `pnpm.catalog.${catalogName}`,
+    displayFrom: `10.${index}.0`,
+    displayTo: `10.${index}.1`,
     newVersion: `10.${index}.1`,
     packageFile: "pnpm-workspace.yaml",
     updateType: "patch" as const,
@@ -2085,7 +1870,11 @@ const buildNestedPairList = (fixture: FixtureWorkspace): string[] =>
 /** Every property a generated workspace's changesets must satisfy, asserted against one materialized fixture. */
 const assertWorkspaceChangesets = async (fixture: FixtureWorkspace): Promise<void> => {
   const upgradeList = buildUpgradeList(fixture);
-  const options = { argumentList: [encodeUpgradeList(upgradeList)], directory: fixture.directory, environment: {} };
+  const options = {
+    cwd: fixture.directory,
+    templateFilePath: undefined,
+    upgradeListString: encodeUpgradeList(upgradeList),
+  };
   const firstFilePathList = await run(options);
   const secondFilePathList = await run(options);
 
