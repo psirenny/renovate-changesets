@@ -6,7 +6,13 @@ import { describe, expect, it } from "vitest";
 import { resolveNpmPackagesByCatalogDependency, resolveNpmPackagesByOverrideDependency } from "./npm.js";
 
 // Unreviewed
-const buildPackage = (name: string, packageJson: Record<string, unknown> = {}): Package => ({
+const buildPackage = ({
+  name,
+  packageJson = {},
+}: {
+  name: string;
+  packageJson?: Record<string, unknown>;
+}): Package => ({
   dir: path.join(process.cwd(), "packages", name),
   packageJson: { name, version: "1.0.0", ...packageJson },
   relativeDir: `packages/${name}`,
@@ -14,13 +20,13 @@ const buildPackage = (name: string, packageJson: Record<string, unknown> = {}): 
 
 describe(resolveNpmPackagesByCatalogDependency, () => {
   const packageList = [
-    buildPackage("bare-default", { dependencies: { turbo: "catalog:" } }),
-    buildPackage("named-default", { devDependencies: { turbo: "catalog:default" } }),
-    buildPackage("shared-dev", { devDependencies: { turbo: "catalog:shared-dev" } }),
-    buildPackage("optional", { optionalDependencies: { turbo: "catalog:shared-dev" } }),
-    buildPackage("peer", { peerDependencies: { turbo: "catalog:shared-dev" } }),
-    buildPackage("pinned", { dependencies: { turbo: "2.10.10" } }),
-    buildPackage("unrelated", { dependencies: { other: "catalog:" } }),
+    buildPackage({ name: "bare-default", packageJson: { dependencies: { turbo: "catalog:" } } }),
+    buildPackage({ name: "named-default", packageJson: { devDependencies: { turbo: "catalog:default" } } }),
+    buildPackage({ name: "shared-dev", packageJson: { devDependencies: { turbo: "catalog:shared-dev" } } }),
+    buildPackage({ name: "optional", packageJson: { optionalDependencies: { turbo: "catalog:shared-dev" } } }),
+    buildPackage({ name: "peer", packageJson: { peerDependencies: { turbo: "catalog:shared-dev" } } }),
+    buildPackage({ name: "pinned", packageJson: { dependencies: { turbo: "2.10.10" } } }),
+    buildPackage({ name: "unrelated", packageJson: { dependencies: { other: "catalog:" } } }),
   ];
 
   it("Matches a bare catalog: and catalog:default for the default catalog", () => {
@@ -61,7 +67,7 @@ describe(resolveNpmPackagesByCatalogDependency, () => {
 
     expect(
       resolveNpmPackagesByCatalogDependency({
-        packageList: [buildPackage("pinned", { dependencies: { turbo: "2.10.10" } })],
+        packageList: [buildPackage({ name: "pinned", packageJson: { dependencies: { turbo: "2.10.10" } } })],
         upgrade: { depName: "turbo", depType: "pnpm.catalog.default", packageFile: "pnpm-workspace.yaml" },
       }),
     ).toStrictEqual([]);
@@ -73,9 +79,9 @@ describe(resolveNpmPackagesByOverrideDependency, () => {
     expect.hasAssertions();
 
     const packageList = [
-      buildPackage("declares", { dependencies: { minimatch: "^10.0.0" } }),
-      buildPackage("declares-dev", { devDependencies: { minimatch: "^10.0.0" } }),
-      buildPackage("unrelated", { dependencies: { ky: "^3.0.0" } }),
+      buildPackage({ name: "declares", packageJson: { dependencies: { minimatch: "^10.0.0" } } }),
+      buildPackage({ name: "declares-dev", packageJson: { devDependencies: { minimatch: "^10.0.0" } } }),
+      buildPackage({ name: "unrelated", packageJson: { dependencies: { ky: "^3.0.0" } } }),
     ];
 
     expect(
@@ -91,7 +97,7 @@ describe(resolveNpmPackagesByOverrideDependency, () => {
 
     expect(
       resolveNpmPackagesByOverrideDependency({
-        packageList: [buildPackage("app", { dependencies: { ky: "^3.0.0" } })],
+        packageList: [buildPackage({ name: "app", packageJson: { dependencies: { ky: "^3.0.0" } } })],
         upgrade: { depName: "minimatch", depType: "overrides", packageFile: "package.json" },
       }),
     ).toStrictEqual([]);
