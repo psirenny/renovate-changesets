@@ -5,7 +5,7 @@ import path from "node:path";
 import type { Package } from "@manypkg/get-packages";
 import { describe, expect, it, onTestFinished } from "vitest";
 
-import { getCargoWorkspacePackageNameList } from "./cargo.js";
+import { resolveCargoPackagesByWorkspaceDependency } from "./cargo.js";
 
 // Unreviewed
 /** Writes a minimal single-package or multi-package workspace with exactly the shape a test asks for. */
@@ -35,7 +35,7 @@ const buildCargoWorkspacePackage = (directory: string, name: string): Package =>
   relativeDir: `packages/${name}`,
 });
 
-describe(getCargoWorkspacePackageNameList, () => {
+describe(resolveCargoPackagesByWorkspaceDependency, () => {
   it("Names the packages whose crate inherits the dependency from the workspace root", async () => {
     expect.hasAssertions();
 
@@ -54,7 +54,7 @@ describe(getCargoWorkspacePackageNameList, () => {
       buildCargoWorkspacePackage(directory, name),
     );
 
-    await expect(getCargoWorkspacePackageNameList(packageList, "serde")).resolves.toStrictEqual([
+    await expect(resolveCargoPackagesByWorkspaceDependency({ depName: "serde", packageList })).resolves.toStrictEqual([
       "inline",
       "dotted",
       "featured",
@@ -73,7 +73,7 @@ describe(getCargoWorkspacePackageNameList, () => {
 
     const packageList = ["dev", "build", "platform"].map((name) => buildCargoWorkspacePackage(directory, name));
 
-    await expect(getCargoWorkspacePackageNameList(packageList, "serde")).resolves.toStrictEqual([
+    await expect(resolveCargoPackagesByWorkspaceDependency({ depName: "serde", packageList })).resolves.toStrictEqual([
       "dev",
       "build",
       "platform",
@@ -91,7 +91,9 @@ describe(getCargoWorkspacePackageNameList, () => {
     });
     const cargoPackageList = ["scalar", "heir"].map((name) => buildCargoWorkspacePackage(directory, name));
 
-    await expect(getCargoWorkspacePackageNameList(cargoPackageList, "serde")).resolves.toStrictEqual(["heir"]);
+    await expect(
+      resolveCargoPackagesByWorkspaceDependency({ depName: "serde", packageList: cargoPackageList }),
+    ).resolves.toStrictEqual(["heir"]);
   });
 
   it("Reports which Cargo manifest failed to parse", async () => {
@@ -100,7 +102,7 @@ describe(getCargoWorkspacePackageNameList, () => {
     const directory = await createWorkspace({ "packages/broken/Cargo.toml": "[dependencies\nserde = " });
     const packageList = [buildCargoWorkspacePackage(directory, "broken")];
 
-    await expect(getCargoWorkspacePackageNameList(packageList, "serde")).rejects.toThrow(
+    await expect(resolveCargoPackagesByWorkspaceDependency({ depName: "serde", packageList })).rejects.toThrow(
       /Couldn't parse .*Cargo\.toml/u,
     );
   });

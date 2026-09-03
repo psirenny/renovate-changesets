@@ -3,7 +3,7 @@ import path from "node:path";
 import type { Package } from "@manypkg/get-packages";
 import { describe, expect, it } from "vitest";
 
-import { getCatalogPackageNameList, getOverridePackageNameList } from "./npm.js";
+import { resolveNpmPackagesByCatalogDependency, resolveNpmPackagesByOverrideDependency } from "./npm.js";
 
 // Unreviewed
 const buildPackage = (name: string, packageJson: Record<string, unknown> = {}): Package => ({
@@ -12,7 +12,7 @@ const buildPackage = (name: string, packageJson: Record<string, unknown> = {}): 
   relativeDir: `packages/${name}`,
 });
 
-describe(getCatalogPackageNameList, () => {
+describe(resolveNpmPackagesByCatalogDependency, () => {
   const packageList = [
     buildPackage("bare-default", { dependencies: { turbo: "catalog:" } }),
     buildPackage("named-default", { devDependencies: { turbo: "catalog:default" } }),
@@ -26,35 +26,53 @@ describe(getCatalogPackageNameList, () => {
   it("Matches a bare catalog: and catalog:default for the default catalog", () => {
     expect.hasAssertions();
 
-    expect(getCatalogPackageNameList(packageList, "default", "turbo")).toStrictEqual(["bare-default", "named-default"]);
+    expect(
+      resolveNpmPackagesByCatalogDependency({
+        catalogName: "default",
+        depName: "turbo",
+        packageList,
+      }),
+    ).toStrictEqual(["bare-default", "named-default"]);
   });
 
   it("Matches a named catalog in every dependency group", () => {
     expect.hasAssertions();
 
-    expect(getCatalogPackageNameList(packageList, "shared-dev", "turbo")).toStrictEqual([
-      "shared-dev",
-      "optional",
-      "peer",
-    ]);
+    expect(
+      resolveNpmPackagesByCatalogDependency({
+        catalogName: "shared-dev",
+        depName: "turbo",
+        packageList,
+      }),
+    ).toStrictEqual(["shared-dev", "optional", "peer"]);
   });
 
   it("Doesn't let a named catalog claim the packages on the default one", () => {
     expect.hasAssertions();
 
-    expect(getCatalogPackageNameList(packageList, "react-19", "turbo")).toStrictEqual([]);
+    expect(
+      resolveNpmPackagesByCatalogDependency({
+        catalogName: "react-19",
+        depName: "turbo",
+        packageList,
+      }),
+    ).toStrictEqual([]);
   });
 
   it("Ignores a package that pins the dependency itself", () => {
     expect.hasAssertions();
 
     expect(
-      getCatalogPackageNameList([buildPackage("pinned", { dependencies: { turbo: "2.10.10" } })], "default", "turbo"),
+      resolveNpmPackagesByCatalogDependency({
+        catalogName: "default",
+        depName: "turbo",
+        packageList: [buildPackage("pinned", { dependencies: { turbo: "2.10.10" } })],
+      }),
     ).toStrictEqual([]);
   });
 });
 
-describe(getOverridePackageNameList, () => {
+describe(resolveNpmPackagesByOverrideDependency, () => {
   it("Names only the packages that declare the dependency themselves", () => {
     expect.hasAssertions();
 
@@ -64,14 +82,20 @@ describe(getOverridePackageNameList, () => {
       buildPackage("unrelated", { dependencies: { ky: "^3.0.0" } }),
     ];
 
-    expect(getOverridePackageNameList(packageList, "minimatch")).toStrictEqual(["declares", "declares-dev"]);
+    expect(resolveNpmPackagesByOverrideDependency({ depName: "minimatch", packageList })).toStrictEqual([
+      "declares",
+      "declares-dev",
+    ]);
   });
 
   it("Names nothing when the override pins something transitive", () => {
     expect.hasAssertions();
 
     expect(
-      getOverridePackageNameList([buildPackage("app", { dependencies: { ky: "^3.0.0" } })], "minimatch"),
+      resolveNpmPackagesByOverrideDependency({
+        depName: "minimatch",
+        packageList: [buildPackage("app", { dependencies: { ky: "^3.0.0" } })],
+      }),
     ).toStrictEqual([]);
   });
 });

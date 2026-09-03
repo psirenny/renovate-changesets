@@ -61,7 +61,8 @@
     "@manypkg/get-packages": "^3.1.0",
     "handlebars": "^4.7.9",
     "smol-toml": "^1.8.0",
-    "yargs": "^18.1.0"
+    "yargs": "^18.1.0",
+    "zod": "^4.5.4"
   },
   "devDependencies": {
     "@changesets/changelog-github": "1.0.0",

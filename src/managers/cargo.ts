@@ -6,30 +6,12 @@ import { parse as parseToml } from "smol-toml";
 
 const cargoDependencySectionList = ["build-dependencies", "dependencies", "dev-dependencies"] as const;
 
-// A partial Cargo.toml manifest definition based on https://www.schemastore.org/cargo.json.
+// A partial Cargo.toml file based on https://www.schemastore.org/cargo.json.
 type CargoDependency = string | { workspace?: boolean };
 type CargoDependencyTable = Record<string, CargoDependency>;
 type CargoPlatform = Partial<Record<(typeof cargoDependencySectionList)[number], CargoDependencyTable>>;
 type CargoManifest = CargoPlatform & { target?: Record<string, CargoPlatform> };
 
-// Unreviewed
-/** Reads and parses a package's crate manifest, or `null` when the package isn't a crate at all. */
-const readCargoManifest = async (manifestFilePath: string): Promise<CargoManifest | null> => {
-  const content = await readFile(manifestFilePath, "utf8").catch(() => null);
-
-  if (content === null) {
-    return null;
-  }
-
-  try {
-    return parseToml(content);
-  } catch (error) {
-    throw new Error(`Couldn't parse ${manifestFilePath}.`, { cause: error });
-  }
-};
-
-// Unreviewed
-/** Collects a Cargo manifest's dependency tables, including the per-platform `[target.'cfg(…)'.dependencies]` ones. */
 const readCargoDependencyTableList = (manifest: CargoManifest): (CargoDependencyTable | undefined)[] => [
   ...cargoDependencySectionList.map((sectionName) => manifest[sectionName]),
   ...Object.values(manifest.target ?? {}).flatMap((platformSection) =>
@@ -37,34 +19,34 @@ const readCargoDependencyTableList = (manifest: CargoManifest): (CargoDependency
   ),
 ];
 
-// Unreviewed
-const inheritsCargoWorkspaceDependency = (manifest: CargoManifest, depName: string): boolean =>
-  readCargoDependencyTableList(manifest).some((table) => {
-    const entry = table?.[depName];
-
-    return typeof entry === "object" && entry.workspace === true;
-  });
-
-// Unreviewed
-/**
- * Finds every package whose crate inherits the dependency from the workspace root — a member writes `serde.workspace =
- * true` and the version lives in the root `Cargo.toml`. A crate is matched to a changeset-able package by looking for
- * `Cargo.toml` beside each package's `package.json`.
- */
-export const getCargoWorkspacePackageNameList = async (
-  workspacePackageList: Package[],
-  depName: string,
-): Promise<string[]> => {
+export const resolveCargoPackagesByWorkspaceDependency = async ({
+  depName,
+  packageList,
+}: {
+  depName: string;
+  packageList: Package[];
+}): Promise<string[]> => {
   const packageNameList = await Promise.all(
-    workspacePackageList.map(async (workspacePackage) => {
-      const manifestFilePath = path.join(workspacePackage.dir, "Cargo.toml");
-      const manifest = await readCargoManifest(manifestFilePath);
+    packageList.map(async (_package) => {
+      const manifestFilePath = path.join(_package.dir, "Cargo.toml");
+      const manifestContent = await readFile(manifestFilePath, "utf8").catch(() => null);
 
-      if (manifest === null || !inheritsCargoWorkspaceDependency(manifest, depName)) {
+      if (manifestContent === null) {
         return null;
       }
 
-      return workspacePackage.packageJson.name;
+      try {
+        const manifest: CargoManifest = parseToml(manifestContent);
+
+        const inheritsWorkspaceDependency = readCargoDependencyTableList(manifest).some((table) => {
+          const entry = table?.[depName];
+          return typeof entry === "object" && entry.workspace === true;
+        });
+
+        return inheritsWorkspaceDependency ? _package.packageJson.name : null;
+      } catch (error) {
+        throw new Error(`Couldn't parse ${manifestFilePath}.`, { cause: error });
+      }
     }),
   );
 

@@ -14,9 +14,9 @@ import {
   defaultTemplate,
   getSharedDeclarationPackageNameList,
   getUpgradeList,
-  getWorkspacePackageList,
+  getPackageList,
   main,
-  resolvePackageName,
+  resolveDependency,
   run,
   writeChangesets,
   type RenovateUpgrade,
@@ -236,25 +236,25 @@ const PACKAGE_LIST = [
   buildOwnedPackage("packages/app-extras", "@fixture/app-extras"),
 ];
 
-describe(getWorkspacePackageList, () => {
+describe(getPackageList, () => {
   it("Fails when the repository has no Changesets config, which this tool exists to write for", async () => {
     expect.hasAssertions();
 
-    const directory = await createWorkspace({
+    const cwd = await createWorkspace({
       "package.json": '{ "name": "root", "private": true, "version": "0.0.0" }\n',
       "packages/app/package.json": '{ "name": "@fixture/app", "version": "1.0.0" }\n',
       "pnpm-workspace.yaml": "packages:\n  - packages/app\n",
     });
 
-    await expect(getWorkspacePackageList(directory)).rejects.toThrow(/ENOENT.*config\.json/u);
+    await expect(getPackageList({ cwd })).rejects.toThrow(/ENOENT.*config\.json/u);
   });
 });
 
 // Unreviewed
-const resolveOwner = (packageFile: string, workspacePackageList: Package[] = PACKAGE_LIST): string | null =>
-  resolvePackageName({ cwd: ROOT_DIRECTORY, upgrade: { packageFile }, workspacePackageList });
+const resolveOwner = (packageFile: string, packageList: Package[] = PACKAGE_LIST): string | null =>
+  resolveDependency({ cwd: ROOT_DIRECTORY, packageList, upgrade: { packageFile } });
 
-describe(resolvePackageName, () => {
+describe(resolveDependency, () => {
   it("Gives a package its own manifest", () => {
     expect.hasAssertions();
 
@@ -302,7 +302,7 @@ describe(resolvePackageName, () => {
   it("Gives an upgrade with no manifest path to nobody", () => {
     expect.hasAssertions();
 
-    expect(resolvePackageName({ cwd: ROOT_DIRECTORY, upgrade: {}, workspacePackageList: PACKAGE_LIST })).toBeNull();
+    expect(resolveDependency({ cwd: ROOT_DIRECTORY, packageList: PACKAGE_LIST, upgrade: {} })).toBeNull();
   });
 
   it("Gives everything to the one package in a single-package repository", () => {
@@ -328,8 +328,8 @@ describe(getSharedDeclarationPackageNameList, () => {
     await expect(
       getSharedDeclarationPackageNameList({
         isOwned: false,
+        packageList,
         upgrade: { depName: "turbo", depType: "pnpm.catalog.shared-dev" },
-        workspacePackageList: packageList,
       }),
     ).resolves.toStrictEqual(["catalogued"]);
   });
@@ -340,8 +340,8 @@ describe(getSharedDeclarationPackageNameList, () => {
     await expect(
       getSharedDeclarationPackageNameList({
         isOwned: false,
+        packageList,
         upgrade: { depName: "turbo", depType: "yarn.catalog.shared-dev" },
-        workspacePackageList: packageList,
       }),
     ).resolves.toStrictEqual(["catalogued"]);
   });
@@ -352,8 +352,8 @@ describe(getSharedDeclarationPackageNameList, () => {
     await expect(
       getSharedDeclarationPackageNameList({
         isOwned: true,
+        packageList,
         upgrade: { depName: "turbo", depType: "pnpm.catalog.shared-dev" },
-        workspacePackageList: packageList,
       }),
     ).resolves.toStrictEqual(["catalogued"]);
   });
@@ -367,15 +367,15 @@ describe(getSharedDeclarationPackageNameList, () => {
       await expect(
         getSharedDeclarationPackageNameList({
           isOwned: false,
+          packageList,
           upgrade: { depName: "turbo", depType },
-          workspacePackageList: packageList,
         }),
       ).resolves.toStrictEqual(["catalogued", "declares"]);
       await expect(
         getSharedDeclarationPackageNameList({
           isOwned: true,
+          packageList,
           upgrade: { depName: "turbo", depType },
-          workspacePackageList: packageList,
         }),
       ).resolves.toBeNull();
     },
@@ -387,8 +387,8 @@ describe(getSharedDeclarationPackageNameList, () => {
     await expect(
       getSharedDeclarationPackageNameList({
         isOwned: false,
+        packageList,
         upgrade: { depName: "minimatch", depType: "overrides" },
-        workspacePackageList: packageList,
       }),
     ).resolves.toStrictEqual([]);
   });
@@ -399,8 +399,8 @@ describe(getSharedDeclarationPackageNameList, () => {
     await expect(
       getSharedDeclarationPackageNameList({
         isOwned: false,
+        packageList,
         upgrade: { depName: "turbo", depType: "devDependencies" },
-        workspacePackageList: packageList,
       }),
     ).resolves.toBeNull();
   });
@@ -428,10 +428,54 @@ describe(getSharedDeclarationPackageNameList, () => {
     await expect(
       getSharedDeclarationPackageNameList({
         isOwned: false,
-        upgrade: { depName: "serde", depType: "workspace.dependencies" },
-        workspacePackageList: cargoPackageList,
+        packageList: cargoPackageList,
+        upgrade: { depName: "serde", depType: "workspace.dependencies", manager: "cargo" },
       }),
     ).resolves.toStrictEqual(["heir"]);
+  });
+
+  it("Leaves a workspace.dependencies upgrade from another manager to ownership", async () => {
+    expect.hasAssertions();
+
+    const directory = await createWorkspace({
+      "packages/heir/Cargo.toml": '[package]\nname = "heir"\n\n[dependencies]\nserde.workspace = true\n',
+    });
+
+    await expect(
+      getSharedDeclarationPackageNameList({
+        isOwned: false,
+        packageList: [
+          {
+            dir: path.join(directory, "packages/heir"),
+            packageJson: { name: "heir", version: "1.0.0" },
+            relativeDir: "packages/heir",
+          },
+        ],
+        upgrade: { depName: "serde", depType: "workspace.dependencies", manager: "not-cargo" },
+      }),
+    ).resolves.toBeNull();
+  });
+
+  it("Leaves a workspace.dependencies upgrade Renovate credited to no manager to ownership", async () => {
+    expect.hasAssertions();
+
+    const directory = await createWorkspace({
+      "packages/heir/Cargo.toml": '[package]\nname = "heir"\n\n[dependencies]\nserde.workspace = true\n',
+    });
+
+    await expect(
+      getSharedDeclarationPackageNameList({
+        isOwned: false,
+        packageList: [
+          {
+            dir: path.join(directory, "packages/heir"),
+            packageJson: { name: "heir", version: "1.0.0" },
+            relativeDir: "packages/heir",
+          },
+        ],
+        upgrade: { depName: "serde", depType: "workspace.dependencies" },
+      }),
+    ).resolves.toBeNull();
   });
 
   it("Leaves an upgrade with no dependency type to ownership", async () => {
@@ -440,8 +484,8 @@ describe(getSharedDeclarationPackageNameList, () => {
     await expect(
       getSharedDeclarationPackageNameList({
         isOwned: false,
+        packageList,
         upgrade: { depName: "turbo" },
-        workspacePackageList: packageList,
       }),
     ).resolves.toBeNull();
   });
@@ -452,8 +496,8 @@ describe(getSharedDeclarationPackageNameList, () => {
     await expect(
       getSharedDeclarationPackageNameList({
         isOwned: false,
+        packageList,
         upgrade: { depType: "pnpm.catalog.shared-dev" },
-        workspacePackageList: packageList,
       }),
     ).resolves.toBeNull();
   });
@@ -1243,6 +1287,35 @@ describe(run, () => {
     expect(contentList).toStrictEqual(['---\n"solo": patch\n---\n\nky@2.0.0\n']);
   });
 
+  it("Keeps a field it doesn't name, so a template can still read it", async () => {
+    expect.hasAssertions();
+
+    const directory = await createTemporaryWorkspace({
+      ".github/changeset.md": '---\n"{{changesetPackageName}}": patch\n---\n\n{{depNameLinked}}\n',
+      "package.json": serializePackageJson({ name: "solo", version: "1.0.0" }),
+    });
+
+    await run({
+      cwd: directory,
+      templateFilePath: ".github/changeset.md",
+      upgradeListString: encodeUpgradeList([
+        {
+          depName: "ky",
+          depNameLinked: "[ky](https://github.com/sindresorhus/ky)",
+          displayTo: "2.0.0",
+          newVersion: "2.0.0",
+          packageFile: "package.json",
+          packageName: "ky",
+        },
+      ]),
+    });
+
+    const changesetList = await readChangesetList(directory);
+    const contentList = changesetList.map((changeset) => changeset.content);
+
+    expect(contentList).toStrictEqual(['---\n"solo": patch\n---\n\n[ky](https://github.com/sindresorhus/ky)\n']);
+  });
+
   it("Fails when a template it was told to use isn't there", async () => {
     expect.hasAssertions();
 
@@ -1334,11 +1407,23 @@ describe(run, () => {
       "package.json": serializePackageJson({ name: "solo", version: "1.0.0" }),
     });
 
-    // `e30=` is base64 for `{}` — decodable JSON, but not the array Renovate is supposed to send. The shape is
-    // trusted rather than checked, so this surfaces as the array method being missing.
+    // `e30=` is base64 for `{}` — decodable JSON, but not the array Renovate is supposed to send.
     await expect(run({ cwd: directory, templateFilePath: undefined, upgradeListString: "e30=" })).rejects.toThrow(
-      /is not a function/u,
+      /expected array, received object/u,
     );
+  });
+
+  it("Throws when a field isn't the type Renovate sends, naming where it went wrong", async () => {
+    expect.hasAssertions();
+
+    const directory = await createTemporaryWorkspace({
+      "package.json": serializePackageJson({ name: "solo", version: "1.0.0" }),
+    });
+
+    // `W3siZGVwTmFtZSI6NDJ9XQ==` is base64 for `[{"depName":42}]` — a number where Renovate sends a string.
+    await expect(
+      run({ cwd: directory, templateFilePath: undefined, upgradeListString: "W3siZGVwTmFtZSI6NDJ9XQ==" }),
+    ).rejects.toThrow(/depName[\s\S]*expected string, received number/u);
   });
 
   it("Throws when the payload isn't decodable JSON", async () => {
@@ -1481,7 +1566,7 @@ describe(main, () => {
 
     // `e30=` is base64 for `{}` — decodable JSON, but not the array Renovate is supposed to send.
     await expect(main(["e30=", "--cwd", directory])).resolves.toBe(1);
-    mainRecorder.assertLogged({ level: "error", message: /is not a function/u });
+    mainRecorder.assertLogged({ level: "error", message: /expected array, received object/u });
   });
 
   it("Takes every option from a flag", async () => {
@@ -2010,5 +2095,6 @@ describe("Generated workspaces", () => {
         await removeWorkspace(fixture.directory);
       }
     },
+    30_000,
   );
 });

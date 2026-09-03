@@ -9,13 +9,14 @@ import { getPackages, type Package } from "@manypkg/get-packages";
 import Handlebars from "handlebars";
 import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
+import { z } from "zod";
 
 import packageJson from "../package.json" with { type: "json" };
-import { getCargoWorkspacePackageNameList } from "./managers/cargo.js";
-import { getCatalogPackageNameList, getOverridePackageNameList } from "./managers/npm.js";
-import type { RenovateUpgrade } from "./typedefs.js";
+import { resolveCargoPackagesByWorkspaceDependency } from "./managers/cargo.js";
+import { resolveNpmPackagesByCatalogDependency, resolveNpmPackagesByOverrideDependency } from "./managers/npm.js";
+import { renovateUpgradeSchema, type RenovateUpgrade } from "./schema.js";
 
-export type { RenovateUpdateType, RenovateUpgrade } from "./typedefs.js";
+export type { RenovateUpdateType, RenovateUpgrade } from "./schema.js";
 
 const logger = getLogger(["renovate-changesets"]);
 
@@ -91,7 +92,7 @@ export const getUpgradeList = (rawUpgradeList: RenovateUpgrade[]): RenovateUpgra
     return [upgrade];
   });
 
-export const getWorkspacePackageList = async (cwd: string): Promise<Package[]> => {
+export const getPackageList = async ({ cwd }: { cwd: string }): Promise<Package[]> => {
   const workspace = await getPackages(cwd);
   const changesetConfig = await readChangesetConfig(cwd, workspace);
 
@@ -100,29 +101,22 @@ export const getWorkspacePackageList = async (cwd: string): Promise<Package[]> =
   }
 
   return workspace.packages.filter(
-    (package_) =>
-      !shouldSkipPackage(package_, {
+    (_package) =>
+      !shouldSkipPackage(_package, {
         allowPrivatePackages: changesetConfig.config.privatePackages.version,
         ignore: changesetConfig.config.ignore,
       }),
   );
 };
 
-// Unreviewed
-/**
- * Finds the workspace package that owns a manifest file. A manifest outside every package — `mise.toml` at the
- * repository root, a GitHub Actions workflow — belongs to no package and resolves to `null` on purpose, which is what
- * keeps those updates out of every changelog. Renovate reports `packageFile` relative to the repository root, so it is
- * resolved against `cwd` rather than where the process runs.
- */
-export const resolvePackageName = ({
+export const resolveDependency = ({
   cwd,
+  packageList,
   upgrade,
-  workspacePackageList,
 }: {
   cwd: string;
+  packageList: Package[];
   upgrade: RenovateUpgrade;
-  workspacePackageList: Package[];
 }): string | null => {
   const packageFile = upgrade.packageFile ?? null;
 
@@ -133,7 +127,7 @@ export const resolvePackageName = ({
   const resolvedManifestFilePath = path.resolve(cwd, packageFile);
 
   return (
-    workspacePackageList
+    packageList
       // ✓ Includes — manifests inside the workspace package.
       //   - "/packages/foo", "/packages/foo/manifest.json"     => "manifest.json"
       //   - "/packages/foo", "/packages/foo/bar/manifest.json" => "bar/manifest.json"
@@ -141,8 +135,8 @@ export const resolvePackageName = ({
       // ✗ Rejects — manifests outside it, including a sibling whose name shares a prefix.
       //   - "/packages/foo", "/packages/bar/manifest.json"    => "../bar/manifest.json"
       //   - "/packages/foo", "/packages/foobar/manifest.json" => "../foobar/manifest.json"
-      .filter((workspacePackage) => {
-        const relativeFilePath = path.relative(path.resolve(workspacePackage.dir), resolvedManifestFilePath);
+      .filter((_package) => {
+        const relativeFilePath = path.relative(path.resolve(_package.dir), resolvedManifestFilePath);
         return !relativeFilePath.startsWith("..");
       })
       // Deepest match wins, so a package nested inside another claims its own manifests:
@@ -163,62 +157,58 @@ export const resolvePackageName = ({
  */
 export const getSharedDeclarationPackageNameList = async ({
   isOwned,
+  packageList,
   upgrade,
-  workspacePackageList,
 }: {
   isOwned: boolean;
+  packageList: Package[];
   upgrade: RenovateUpgrade;
-  workspacePackageList: Package[];
 }): Promise<string[] | null> => {
-  const depName = upgrade.depName ?? null;
-  const depType = upgrade.depType ?? null;
+  const { depName = null, depType = null } = upgrade;
+  const { packageName = depName ?? null } = upgrade;
 
-  if (depName === null || depType === null) {
+  if (depName === null || depType === null || packageName === null) {
     return null;
   }
 
-  // Consumers declare a dependency under its clean name, which is `packageName` when `depName` is an override selector
-  // like "minimatch@>=10.0.0 <10.2.3" — Renovate pads `packageName` with `depName` everywhere else.
-  const packageName = upgrade.packageName ?? depName;
-  const catalogName = /^(?:pnpm|yarn)\.catalog\.(?<catalogName>.+)$/u.exec(depType)?.groups?.catalogName;
-
-  if (catalogName !== undefined) {
-    return getCatalogPackageNameList(workspacePackageList, catalogName, packageName);
+  const npmCatalogName = /^(?:pnpm|yarn)\.catalog\.(?<catalogName>.+)$/u.exec(depType)?.groups?.catalogName;
+  if (npmCatalogName !== undefined) {
+    return resolveNpmPackagesByCatalogDependency({
+      catalogName: npmCatalogName,
+      depName: packageName,
+      packageList,
+    });
   }
 
-  if (depType === "workspace.dependencies") {
-    return getCargoWorkspacePackageNameList(workspacePackageList, packageName);
+  if (upgrade.manager === "cargo" && depType === "workspace.dependencies") {
+    return resolveCargoPackagesByWorkspaceDependency({ depName: packageName, packageList });
   }
 
   // A single-package repository keeps overrides in the one `package.json` it has, where ownership already gives the
   // right answer, so they only expand once no package owns the manifest.
   if (!isOwned && ["overrides", "pnpm-workspace.overrides", "pnpm.overrides", "resolutions"].includes(depType)) {
-    return getOverridePackageNameList(workspacePackageList, packageName);
+    return resolveNpmPackagesByOverrideDependency({ depName: packageName, packageList });
   }
 
   return null;
 };
 
-/**
- * Pairs each upgrade with the packages whose changelogs should record it. Most upgrades are one-to-one through
- * ownership; a shared declaration expands to every consumer; an upgrade that matches neither expands to nothing.
- */
-export const resolveUpgrades = async ({
+export const resolveDependencies = async ({
   cwd,
+  packageList,
   upgradeList,
-  workspacePackageList,
 }: {
   cwd: string;
+  packageList: Package[];
   upgradeList: RenovateUpgrade[];
-  workspacePackageList: Package[];
 }): Promise<ResolvedRenovateUpgrade[]> => {
   const resolvedUpgradeList = await Promise.all(
     upgradeList.map(async (upgrade) => {
-      const owningPackageName = resolvePackageName({ cwd, upgrade, workspacePackageList });
+      const owningPackageName = resolveDependency({ cwd, packageList, upgrade });
       const sharedPackageNameList = await getSharedDeclarationPackageNameList({
         isOwned: owningPackageName !== null,
+        packageList,
         upgrade,
-        workspacePackageList,
       });
       const packageNameList = sharedPackageNameList ?? (owningPackageName === null ? [] : [owningPackageName]);
 
@@ -227,6 +217,25 @@ export const resolveUpgrades = async ({
   );
 
   return resolvedUpgradeList.flat();
+};
+
+export const writeChangesets = async ({
+  cwd,
+  resolvedUpgradeList,
+  template,
+}: {
+  cwd: string;
+  resolvedUpgradeList: ResolvedRenovateUpgrade[];
+  template: string;
+}): Promise<void> => {
+  await Promise.all(
+    resolvedUpgradeList.map(async (resolvedUpgrade) => {
+      let content = Handlebars.compile(template, { noEscape: true, strict: true })(resolvedUpgrade);
+      content = `${content.replaceAll(/\n{3,}/gu, "\n\n").trim()}\n`;
+      const contentHash = createHash("sha256").update(content).digest("hex").slice(0, 8);
+      await writeFile(path.join(cwd, ".changeset", `renovate-${contentHash}.md`), content);
+    }),
+  );
 };
 
 export const run = async ({
@@ -238,26 +247,21 @@ export const run = async ({
   templateFilePath: string | undefined;
   upgradeListString: string;
 }): Promise<void> => {
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion
-  const upgradeList = JSON.parse(Buffer.from(upgradeListString, "base64").toString("utf8")) as RenovateUpgrade[];
+  const upgradeList = z
+    .array(renovateUpgradeSchema)
+    .parse(JSON.parse(Buffer.from(upgradeListString, "base64").toString("utf8")));
+
   const template =
     templateFilePath === undefined ? defaultTemplate : await readFile(path.resolve(cwd, templateFilePath), "utf8");
-  const workspacePackageList = await getWorkspacePackageList(cwd);
+  const packageList = await getPackageList({ cwd });
 
-  const resolvedUpgradeList = await resolveUpgrades({
+  const resolvedUpgradeList = await resolveDependencies({
     cwd,
+    packageList,
     upgradeList: getUpgradeList(upgradeList),
-    workspacePackageList,
   });
 
-  await Promise.all(
-    resolvedUpgradeList.map(async (resolvedUpgrade) => {
-      let content = Handlebars.compile(template, { noEscape: true, strict: true })(resolvedUpgrade);
-      content = `${content.replaceAll(/\n{3,}/gu, "\n\n").trim()}\n`;
-      const contentHash = createHash("sha256").update(content).digest("hex").slice(0, 8);
-      await writeFile(path.join(cwd, ".changeset", `renovate-${contentHash}.md`), content);
-    }),
-  );
+  await writeChangesets({ cwd, resolvedUpgradeList, template });
 };
 
 export const main = async (argumentList: string[] = hideBin(process.argv)): Promise<number> => {
