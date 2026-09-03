@@ -14,9 +14,9 @@ import { z } from "zod";
 import packageJson from "../package.json" with { type: "json" };
 import { resolveCargoPackagesBySharedUpgrade } from "./managers/cargo.js";
 import { resolveNpmPackagesBySharedUpgrade } from "./managers/npm.js";
-import { renovateUpgradeSchema, type Upgrade } from "./schema.js";
+import { upgradeSchema, type Upgrade } from "./schema.js";
 
-export type { RenovateUpdateType, Upgrade } from "./schema.js";
+export type { UpdateType, Upgrade } from "./schema.js";
 
 const logger = getLogger(["renovate-changesets"]);
 
@@ -176,7 +176,7 @@ export const run = async ({
   upgradeListString: string;
 }): Promise<void> => {
   const upgradeList = z
-    .array(renovateUpgradeSchema)
+    .array(upgradeSchema)
     .parse(JSON.parse(Buffer.from(upgradeListString, "base64").toString("utf8")));
 
   const template =

@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const renovateUpgradeSchema = z
+export const upgradeSchema = z
   .looseObject({
     currentDigest: z.string().nullish(),
     currentDigestShort: z.string().nullish(),
@@ -63,6 +63,6 @@ export const renovateUpgradeSchema = z
     path: ["depName"],
   });
 
-export type Upgrade = z.infer<typeof renovateUpgradeSchema>;
+export type Upgrade = z.infer<typeof upgradeSchema>;
 
-export type RenovateUpdateType = NonNullable<Upgrade["updateType"]>;
+export type UpdateType = NonNullable<Upgrade["updateType"]>;
