@@ -12,20 +12,19 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, onTes
 import {
   configureLogger,
   defaultTemplate,
-  getSharedDeclarationPackageNameList,
-  getUpgradeList,
-  getPackageList,
+  resolvePackagesBySharedUpgrade,
+  findWorkspacePackages,
   main,
-  resolveDependency,
+  resolvePackageByUpgrade,
   run,
   writeChangesets,
-  type RenovateUpgrade,
-  type ResolvedRenovateUpgrade,
+  type Upgrade,
+  type PackageUpgrade,
 } from "./index.js";
 
 // Unreviewed
 /** Encodes upgrades the way Renovate's `{{{encodeBase64 (toJSON upgrades)}}}` does. */
-const encodeUpgradeList = (upgradeList: RenovateUpgrade[]): string =>
+const encodeUpgradeList = (upgradeList: Upgrade[]): string =>
   Buffer.from(JSON.stringify(upgradeList), "utf8").toString("base64");
 
 // Unreviewed
@@ -78,138 +77,8 @@ const buildPackage = (name: string, packageJson: Record<string, unknown> = {}): 
   relativeDir: `packages/${name}`,
 });
 
-// This package's records go nowhere until something configures a sink, so the suite points the category at a recorder
-// and reads what a real run would have written to standard error.
-const recorder = createLogRecorder();
-
-describe(getUpgradeList, () => {
-  beforeAll(async () => {
-    await configure({
-      loggers: [
-        // LogTape's own diagnostics get the recorder too, so a misconfigured suite surfaces instead of vanishing.
-        { category: ["logtape", "meta"], lowestLevel: "error", sinks: ["recorder"] },
-        // The version-range skip logs at info, below what an entry point configures, so the recorder listens lower.
-        { category: "renovate-changesets", lowestLevel: "info", sinks: ["recorder"] },
-      ],
-      reset: true,
-      sinks: { recorder: recorder.sink },
-    });
-  });
-
-  beforeEach(() => {
-    recorder.clear();
-  });
-
-  afterAll(async () => {
-    await reset();
-  });
-
-  it("Passes a nameable upgrade through untouched", () => {
-    expect.hasAssertions();
-
-    const upgrade = {
-      currentValue: "^1.10.10",
-      currentVersion: "1.10.10",
-      datasource: "npm",
-      depName: "oxlint",
-      depType: "devDependencies",
-      displayFrom: "^1.10.10",
-      displayTo: "^2.10.11",
-      manager: "npm",
-      newValue: "^2.10.11",
-      newVersion: "2.10.11",
-      packageFile: "packages/example/package.json",
-      packageName: "oxlint",
-      updateType: "minor",
-    } as const;
-
-    expect(getUpgradeList([upgrade])).toStrictEqual([upgrade]);
-  });
-
-  it("Keeps an override selector when Renovate parsed the clean packageName out of it", () => {
-    expect.hasAssertions();
-
-    const upgrade = {
-      depName: "minimatch@>=10.0.0 <10.2.3",
-      depType: "pnpm-workspace.overrides",
-      displayTo: "10.2.3",
-      newValue: "10.2.3",
-      packageFile: "pnpm-workspace.yaml",
-      packageName: "minimatch",
-    } as const;
-
-    expect(getUpgradeList([upgrade])).toStrictEqual([upgrade]);
-  });
-
-  it("Skips an upgrade with no dependency name, which is what lockFileMaintenance sends", () => {
-    expect.hasAssertions();
-
-    const upgrade = { packageFile: "pnpm-lock.yaml", updateType: "lockFileMaintenance" } as const;
-
-    expect(getUpgradeList([upgrade])).toStrictEqual([]);
-    recorder.assertLogged({ level: "warning", message: /no dependency name or manifest path/u });
-  });
-
-  it("Skips an upgrade with no manifest path", () => {
-    expect.hasAssertions();
-
-    expect(getUpgradeList([{ depName: "ky", newVersion: "3.0.0" }])).toStrictEqual([]);
-    recorder.assertLogged({ level: "warning", message: /no dependency name or manifest path/u });
-  });
-
-  it.each([
-    ["minimatch@>=10.0.0 <10.2.3", "a security-range override key"],
-    ["foo>bar", "a nested override path"],
-    ["some package", "a name with a space"],
-  ])("Skips %s, which is %s rather than a dependency name", (depName) => {
-    expect.hasAssertions();
-
-    const upgrade = { depName, newVersion: "1.0.0", packageFile: "package.json" } as const;
-
-    expect(getUpgradeList([upgrade])).toStrictEqual([]);
-    recorder.assertLogged({ level: "info", message: /version range rather than a dependency name/u });
-  });
-
-  it("Skips an upgrade whose displayTo is empty or missing, which has nothing to say", () => {
-    expect.hasAssertions();
-
-    expect(
-      getUpgradeList([
-        {
-          depName: "ky",
-          displayFrom: "",
-          displayTo: "",
-          packageFile: "package.json",
-          packageName: "ky",
-          updateType: "patch",
-        },
-        {
-          depName: "turbo",
-          newValue: "^3.0.0",
-          packageFile: "package.json",
-          packageName: "turbo",
-          updateType: "patch",
-        },
-      ]),
-    ).toStrictEqual([]);
-    recorder.assertLogged({ level: "warning", message: /empty displayTo/u });
-  });
-
-  it("Reads every upgrade in the payload", () => {
-    expect.hasAssertions();
-
-    const upgradeList = getUpgradeList([
-      { depName: "a", displayTo: "1.0.0", packageFile: "packages/a/package.json", packageName: "a" },
-      { depName: "b", displayTo: "2.0.0", packageFile: "packages/b/package.json", packageName: "b" },
-    ]);
-
-    expect(upgradeList.map((upgrade) => upgrade.depName)).toStrictEqual(["a", "b"]);
-  });
-});
-
-// Unreviewed
 /** Renders one changeset through `writeChangesets`, in a throwaway workspace, and reads back what it wrote. */
-const render = async (template: string, resolvedUpgrade: ResolvedRenovateUpgrade): Promise<string> => {
+const render = async (template: string, resolvedUpgrade: PackageUpgrade): Promise<string> => {
   const directory = await createWorkspace({ ".changeset/.keep": "" });
 
   await writeChangesets({ cwd: directory, resolvedUpgradeList: [resolvedUpgrade], template });
@@ -219,10 +88,8 @@ const render = async (template: string, resolvedUpgrade: ResolvedRenovateUpgrade
   return changeset?.content ?? "";
 };
 
-// Renovate reports `packageFile` relative to the repository root, which is what `ROOT_DIRECTORY` stands in for.
 const ROOT_DIRECTORY = path.resolve("/workspace");
 
-// Unreviewed
 const buildOwnedPackage = (relativeDir: string, name: string): Package => ({
   dir: path.join(ROOT_DIRECTORY, relativeDir),
   packageJson: { name, version: "1.0.0" },
@@ -236,7 +103,7 @@ const PACKAGE_LIST = [
   buildOwnedPackage("packages/app-extras", "@fixture/app-extras"),
 ];
 
-describe(getPackageList, () => {
+describe(findWorkspacePackages, () => {
   it("Fails when the repository has no Changesets config, which this tool exists to write for", async () => {
     expect.hasAssertions();
 
@@ -246,15 +113,15 @@ describe(getPackageList, () => {
       "pnpm-workspace.yaml": "packages:\n  - packages/app\n",
     });
 
-    await expect(getPackageList({ cwd })).rejects.toThrow(/ENOENT.*config\.json/u);
+    await expect(findWorkspacePackages({ cwd })).rejects.toThrow(/ENOENT.*config\.json/u);
   });
 });
 
 // Unreviewed
 const resolveOwner = (packageFile: string, packageList: Package[] = PACKAGE_LIST): string | null =>
-  resolveDependency({ cwd: ROOT_DIRECTORY, packageList, upgrade: { packageFile } });
+  resolvePackageByUpgrade({ cwd: ROOT_DIRECTORY, packageList, upgrade: { packageFile } });
 
-describe(resolveDependency, () => {
+describe(resolvePackageByUpgrade, () => {
   it("Gives a package its own manifest", () => {
     expect.hasAssertions();
 
@@ -299,12 +166,6 @@ describe(resolveDependency, () => {
     expect(resolveOwner("packages/not-a-package/package.json")).toBeNull();
   });
 
-  it("Gives an upgrade with no manifest path to nobody", () => {
-    expect.hasAssertions();
-
-    expect(resolveDependency({ cwd: ROOT_DIRECTORY, packageList: PACKAGE_LIST, upgrade: {} })).toBeNull();
-  });
-
   it("Gives everything to the one package in a single-package repository", () => {
     expect.hasAssertions();
 
@@ -316,7 +177,7 @@ describe(resolveDependency, () => {
   });
 });
 
-describe(getSharedDeclarationPackageNameList, () => {
+describe(resolvePackagesBySharedUpgrade, () => {
   const packageList = [
     buildPackage("catalogued", { dependencies: { turbo: "catalog:shared-dev" } }),
     buildPackage("declares", { dependencies: { turbo: "^2.10.10" } }),
@@ -326,10 +187,10 @@ describe(getSharedDeclarationPackageNameList, () => {
     expect.hasAssertions();
 
     await expect(
-      getSharedDeclarationPackageNameList({
-        isOwned: false,
+      resolvePackagesBySharedUpgrade({
+        hasOwningPackage: false,
         packageList,
-        upgrade: { depName: "turbo", depType: "pnpm.catalog.shared-dev" },
+        upgrade: { depName: "turbo", depType: "pnpm.catalog.shared-dev", packageFile: "pnpm-workspace.yaml" },
       }),
     ).resolves.toStrictEqual(["catalogued"]);
   });
@@ -338,10 +199,10 @@ describe(getSharedDeclarationPackageNameList, () => {
     expect.hasAssertions();
 
     await expect(
-      getSharedDeclarationPackageNameList({
-        isOwned: false,
+      resolvePackagesBySharedUpgrade({
+        hasOwningPackage: false,
         packageList,
-        upgrade: { depName: "turbo", depType: "yarn.catalog.shared-dev" },
+        upgrade: { depName: "turbo", depType: "yarn.catalog.shared-dev", packageFile: ".yarnrc.yml" },
       }),
     ).resolves.toStrictEqual(["catalogued"]);
   });
@@ -350,10 +211,10 @@ describe(getSharedDeclarationPackageNameList, () => {
     expect.hasAssertions();
 
     await expect(
-      getSharedDeclarationPackageNameList({
-        isOwned: true,
+      resolvePackagesBySharedUpgrade({
+        hasOwningPackage: true,
         packageList,
-        upgrade: { depName: "turbo", depType: "pnpm.catalog.shared-dev" },
+        upgrade: { depName: "turbo", depType: "pnpm.catalog.shared-dev", packageFile: "pnpm-workspace.yaml" },
       }),
     ).resolves.toStrictEqual(["catalogued"]);
   });
@@ -365,17 +226,17 @@ describe(getSharedDeclarationPackageNameList, () => {
 
       // Drawing a dependency from a catalog is still declaring it, so an override pinning it reaches both packages.
       await expect(
-        getSharedDeclarationPackageNameList({
-          isOwned: false,
+        resolvePackagesBySharedUpgrade({
+          hasOwningPackage: false,
           packageList,
-          upgrade: { depName: "turbo", depType },
+          upgrade: { depName: "turbo", depType, packageFile: "package.json" },
         }),
       ).resolves.toStrictEqual(["catalogued", "declares"]);
       await expect(
-        getSharedDeclarationPackageNameList({
-          isOwned: true,
+        resolvePackagesBySharedUpgrade({
+          hasOwningPackage: true,
           packageList,
-          upgrade: { depName: "turbo", depType },
+          upgrade: { depName: "turbo", depType, packageFile: "package.json" },
         }),
       ).resolves.toBeNull();
     },
@@ -385,10 +246,10 @@ describe(getSharedDeclarationPackageNameList, () => {
     expect.hasAssertions();
 
     await expect(
-      getSharedDeclarationPackageNameList({
-        isOwned: false,
+      resolvePackagesBySharedUpgrade({
+        hasOwningPackage: false,
         packageList,
-        upgrade: { depName: "minimatch", depType: "overrides" },
+        upgrade: { depName: "minimatch", depType: "overrides", packageFile: "package.json" },
       }),
     ).resolves.toStrictEqual([]);
   });
@@ -397,10 +258,10 @@ describe(getSharedDeclarationPackageNameList, () => {
     expect.hasAssertions();
 
     await expect(
-      getSharedDeclarationPackageNameList({
-        isOwned: false,
+      resolvePackagesBySharedUpgrade({
+        hasOwningPackage: false,
         packageList,
-        upgrade: { depName: "turbo", depType: "devDependencies" },
+        upgrade: { depName: "turbo", depType: "devDependencies", packageFile: "package.json" },
       }),
     ).resolves.toBeNull();
   });
@@ -426,10 +287,10 @@ describe(getSharedDeclarationPackageNameList, () => {
     ];
 
     await expect(
-      getSharedDeclarationPackageNameList({
-        isOwned: false,
+      resolvePackagesBySharedUpgrade({
+        hasOwningPackage: false,
         packageList: cargoPackageList,
-        upgrade: { depName: "serde", depType: "workspace.dependencies", manager: "cargo" },
+        upgrade: { depName: "serde", depType: "workspace.dependencies", manager: "cargo", packageFile: "Cargo.toml" },
       }),
     ).resolves.toStrictEqual(["heir"]);
   });
@@ -442,8 +303,8 @@ describe(getSharedDeclarationPackageNameList, () => {
     });
 
     await expect(
-      getSharedDeclarationPackageNameList({
-        isOwned: false,
+      resolvePackagesBySharedUpgrade({
+        hasOwningPackage: false,
         packageList: [
           {
             dir: path.join(directory, "packages/heir"),
@@ -451,7 +312,12 @@ describe(getSharedDeclarationPackageNameList, () => {
             relativeDir: "packages/heir",
           },
         ],
-        upgrade: { depName: "serde", depType: "workspace.dependencies", manager: "not-cargo" },
+        upgrade: {
+          depName: "serde",
+          depType: "workspace.dependencies",
+          manager: "not-cargo",
+          packageFile: "Cargo.toml",
+        },
       }),
     ).resolves.toBeNull();
   });
@@ -464,8 +330,8 @@ describe(getSharedDeclarationPackageNameList, () => {
     });
 
     await expect(
-      getSharedDeclarationPackageNameList({
-        isOwned: false,
+      resolvePackagesBySharedUpgrade({
+        hasOwningPackage: false,
         packageList: [
           {
             dir: path.join(directory, "packages/heir"),
@@ -473,7 +339,19 @@ describe(getSharedDeclarationPackageNameList, () => {
             relativeDir: "packages/heir",
           },
         ],
-        upgrade: { depName: "serde", depType: "workspace.dependencies" },
+        upgrade: { depName: "serde", depType: "workspace.dependencies", packageFile: "Cargo.toml" },
+      }),
+    ).resolves.toBeNull();
+  });
+
+  it("Leaves a Cargo lockfile refresh, which carries no dependency name, to ownership", async () => {
+    expect.hasAssertions();
+
+    await expect(
+      resolvePackagesBySharedUpgrade({
+        hasOwningPackage: true,
+        packageList,
+        upgrade: { manager: "cargo", packageFile: "Cargo.toml", updateType: "lockFileMaintenance" },
       }),
     ).resolves.toBeNull();
   });
@@ -482,10 +360,10 @@ describe(getSharedDeclarationPackageNameList, () => {
     expect.hasAssertions();
 
     await expect(
-      getSharedDeclarationPackageNameList({
-        isOwned: false,
+      resolvePackagesBySharedUpgrade({
+        hasOwningPackage: false,
         packageList,
-        upgrade: { depName: "turbo" },
+        upgrade: { depName: "turbo", packageFile: "package.json" },
       }),
     ).resolves.toBeNull();
   });
@@ -494,17 +372,17 @@ describe(getSharedDeclarationPackageNameList, () => {
     expect.hasAssertions();
 
     await expect(
-      getSharedDeclarationPackageNameList({
-        isOwned: false,
+      resolvePackagesBySharedUpgrade({
+        hasOwningPackage: false,
         packageList,
-        upgrade: { depType: "pnpm.catalog.shared-dev" },
+        upgrade: { depType: "pnpm.catalog.shared-dev", packageFile: "pnpm-workspace.yaml" },
       }),
     ).resolves.toBeNull();
   });
 });
 
 // Unreviewed
-const buildResolvedUpgrade = (overrides: Partial<ResolvedRenovateUpgrade> = {}): ResolvedRenovateUpgrade => ({
+const buildResolvedUpgrade = (overrides: Partial<PackageUpgrade> = {}): PackageUpgrade => ({
   changesetPackageName: "@fixture/app",
   currentDigest: null,
   currentValue: "^2.0.2",
@@ -527,7 +405,7 @@ const buildResolvedUpgrade = (overrides: Partial<ResolvedRenovateUpgrade> = {}):
 });
 
 // Unreviewed
-const renderBody = async (template: string, overrides: Partial<ResolvedRenovateUpgrade> = {}): Promise<string> =>
+const renderBody = async (template: string, overrides: Partial<PackageUpgrade> = {}): Promise<string> =>
   render(template, buildResolvedUpgrade(overrides));
 
 describe(writeChangesets, () => {
@@ -648,13 +526,14 @@ describe(writeChangesets, () => {
   it("Throws for a field Renovate omitted, so a template guards an optional field with a condition", async () => {
     expect.hasAssertions();
 
-    await expect(render("{{currentDigest}}", { changesetPackageName: "solo", depName: "ky" })).rejects.toThrow(
-      /"currentDigest" not defined/u,
-    );
+    await expect(
+      render("{{currentDigest}}", { changesetPackageName: "solo", depName: "ky", packageFile: "package.json" }),
+    ).rejects.toThrow(/"currentDigest" not defined/u);
     await expect(
       render("{{#if currentDigest}}{{currentDigest}}{{else}}none{{/if}}", {
         changesetPackageName: "solo",
         depName: "ky",
+        packageFile: "package.json",
       }),
     ).resolves.toBe("none\n");
   });
@@ -704,6 +583,34 @@ describe("Default template", () => {
     await expect(render(defaultTemplate, buildResolvedUpgrade())).resolves.toBe(
       '---\n"@fixture/app": patch\n---\n\nUpdated [ky](https://github.com/sindresorhus/ky) from `^2.0.2` to `^3.0.0`.\n',
     );
+  });
+
+  it("Falls back to the dependency name when Renovate omitted the package name", async () => {
+    expect.hasAssertions();
+
+    await expect(
+      render(defaultTemplate, {
+        changesetPackageName: "@fixture/app",
+        depName: "ky",
+        displayFrom: "^2.0.2",
+        displayTo: "^3.0.0",
+        packageFile: "packages/app/package.json",
+      }),
+    ).resolves.toBe('---\n"@fixture/app": patch\n---\n\nUpdated `ky` from `^2.0.2` to `^3.0.0`.\n');
+  });
+
+  it("Names the manager for a lockfile refresh", async () => {
+    expect.hasAssertions();
+
+    await expect(
+      render(defaultTemplate, {
+        changesetPackageName: "@fixture/app",
+        isLockFileMaintenance: true,
+        manager: "npm",
+        packageFile: "packages/app/package.json",
+        updateType: "lockFileMaintenance",
+      }),
+    ).resolves.toBe('---\n"@fixture/app": patch\n---\n\nUpdated the `npm` lockfile.\n');
   });
 
   it("Omits the from side when Renovate has nothing to display there", async () => {
@@ -899,7 +806,7 @@ const createTemporaryWorkspace = async (fileMap: Record<string, string>): Promis
 };
 
 // Unreviewed
-const runIn = async (directory: string, upgradeList: RenovateUpgrade[]): Promise<void> => {
+const runIn = async (directory: string, upgradeList: Upgrade[]): Promise<void> => {
   await run({ cwd: directory, templateFilePath: undefined, upgradeListString: encodeUpgradeList(upgradeList) });
 };
 
@@ -1080,6 +987,53 @@ describe(run, () => {
     const contentList = changesetList.map((changeset) => changeset.content);
 
     expect(contentList).toStrictEqual(['---\n"@fixture/outer": patch\n---\n\nUpdated `ky` to `2.0.0`.\n']);
+  });
+
+  it("Writes a changeset for an upgrade Renovate sent without a package name", async () => {
+    expect.hasAssertions();
+
+    const directory = await createTemporaryWorkspace({
+      "package.json": serializePackageJson({ name: "solo", version: "1.0.0" }),
+    });
+
+    await runIn(directory, [
+      {
+        depName: "ky",
+        depType: "dependencies",
+        displayFrom: "^3.0.0",
+        displayTo: "^3.1.0",
+        packageFile: "package.json",
+      },
+    ]);
+
+    const changesetList = await readChangesetList(directory);
+
+    expect(changesetList.map((changeset) => changeset.content)).toStrictEqual([
+      '---\n"solo": patch\n---\n\nUpdated `ky` from `^3.0.0` to `^3.1.0`.\n',
+    ]);
+  });
+
+  it("Writes a changeset for a lockfile refresh", async () => {
+    expect.hasAssertions();
+
+    const directory = await createTemporaryWorkspace({
+      "package.json": serializePackageJson({ name: "solo", version: "1.0.0" }),
+    });
+
+    await runIn(directory, [
+      {
+        isLockFileMaintenance: true,
+        manager: "npm",
+        packageFile: "package.json",
+        updateType: "lockFileMaintenance",
+      },
+    ]);
+
+    const changesetList = await readChangesetList(directory);
+
+    expect(changesetList.map((changeset) => changeset.content)).toStrictEqual([
+      '---\n"solo": patch\n---\n\nUpdated the `npm` lockfile.\n',
+    ]);
   });
 
   it("Gives a nested package its own manifests when Changesets would version it", async () => {
@@ -1340,7 +1294,7 @@ describe(run, () => {
     const directory = await createTemporaryWorkspace({
       "package.json": serializePackageJson({ name: "solo", version: "1.0.0" }),
     });
-    const upgradeList: RenovateUpgrade[] = [
+    const upgradeList: Upgrade[] = [
       {
         currentVersion: "1.0.0",
         depName: "ky",
@@ -1397,6 +1351,19 @@ describe(run, () => {
     });
 
     await expect(run({ cwd: directory, templateFilePath: undefined, upgradeListString: "" })).rejects.toThrow(/JSON/u);
+    await expect(readChangesetList(directory)).resolves.toStrictEqual([]);
+  });
+
+  it("Throws for an upgrade with no dependency name that isn't a lockfile refresh", async () => {
+    expect.hasAssertions();
+
+    const directory = await createTemporaryWorkspace({
+      "package.json": serializePackageJson({ name: "solo", version: "1.0.0" }),
+    });
+
+    await expect(
+      runIn(directory, [{ displayTo: "^3.1.0", packageFile: "package.json", updateType: "patch" }]),
+    ).rejects.toThrow(/needs a depName unless it is lockFileMaintenance/u);
     await expect(readChangesetList(directory)).resolves.toStrictEqual([]);
   });
 
@@ -1900,7 +1867,7 @@ const findExpectedOwner = (fixture: FixtureWorkspace, manifestFilePath: string):
     .at(0)?.name ?? null;
 
 // Unreviewed
-const buildUpgradeList = (fixture: FixtureWorkspace): RenovateUpgrade[] => [
+const buildUpgradeList = (fixture: FixtureWorkspace): Upgrade[] => [
   // One update per package, each with its own dependency name and version so ownership is never ambiguous.
   ...fixture.packageList.map((fixturePackage, index) => ({
     currentVersion: `${index + 1}.0.0`,

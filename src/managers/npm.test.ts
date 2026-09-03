@@ -28,9 +28,8 @@ describe(resolveNpmPackagesByCatalogDependency, () => {
 
     expect(
       resolveNpmPackagesByCatalogDependency({
-        catalogName: "default",
-        depName: "turbo",
         packageList,
+        upgrade: { depName: "turbo", depType: "pnpm.catalog.default", packageFile: "pnpm-workspace.yaml" },
       }),
     ).toStrictEqual(["bare-default", "named-default"]);
   });
@@ -40,9 +39,8 @@ describe(resolveNpmPackagesByCatalogDependency, () => {
 
     expect(
       resolveNpmPackagesByCatalogDependency({
-        catalogName: "shared-dev",
-        depName: "turbo",
         packageList,
+        upgrade: { depName: "turbo", depType: "pnpm.catalog.shared-dev", packageFile: "pnpm-workspace.yaml" },
       }),
     ).toStrictEqual(["shared-dev", "optional", "peer"]);
   });
@@ -52,9 +50,8 @@ describe(resolveNpmPackagesByCatalogDependency, () => {
 
     expect(
       resolveNpmPackagesByCatalogDependency({
-        catalogName: "react-19",
-        depName: "turbo",
         packageList,
+        upgrade: { depName: "turbo", depType: "pnpm.catalog.react-19", packageFile: "pnpm-workspace.yaml" },
       }),
     ).toStrictEqual([]);
   });
@@ -64,9 +61,8 @@ describe(resolveNpmPackagesByCatalogDependency, () => {
 
     expect(
       resolveNpmPackagesByCatalogDependency({
-        catalogName: "default",
-        depName: "turbo",
         packageList: [buildPackage("pinned", { dependencies: { turbo: "2.10.10" } })],
+        upgrade: { depName: "turbo", depType: "pnpm.catalog.default", packageFile: "pnpm-workspace.yaml" },
       }),
     ).toStrictEqual([]);
   });
@@ -82,10 +78,12 @@ describe(resolveNpmPackagesByOverrideDependency, () => {
       buildPackage("unrelated", { dependencies: { ky: "^3.0.0" } }),
     ];
 
-    expect(resolveNpmPackagesByOverrideDependency({ depName: "minimatch", packageList })).toStrictEqual([
-      "declares",
-      "declares-dev",
-    ]);
+    expect(
+      resolveNpmPackagesByOverrideDependency({
+        packageList,
+        upgrade: { depName: "minimatch", depType: "overrides", packageFile: "package.json" },
+      }),
+    ).toStrictEqual(["declares", "declares-dev"]);
   });
 
   it("Names nothing when the override pins something transitive", () => {
@@ -93,8 +91,8 @@ describe(resolveNpmPackagesByOverrideDependency, () => {
 
     expect(
       resolveNpmPackagesByOverrideDependency({
-        depName: "minimatch",
         packageList: [buildPackage("app", { dependencies: { ky: "^3.0.0" } })],
+        upgrade: { depName: "minimatch", depType: "overrides", packageFile: "package.json" },
       }),
     ).toStrictEqual([]);
   });

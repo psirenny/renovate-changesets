@@ -54,12 +54,12 @@ describe(resolveCargoPackagesByWorkspaceDependency, () => {
       buildCargoWorkspacePackage(directory, name),
     );
 
-    await expect(resolveCargoPackagesByWorkspaceDependency({ depName: "serde", packageList })).resolves.toStrictEqual([
-      "inline",
-      "dotted",
-      "featured",
-      "table",
-    ]);
+    await expect(
+      resolveCargoPackagesByWorkspaceDependency({
+        packageList,
+        upgrade: { depName: "serde", depType: "workspace.dependencies", manager: "cargo", packageFile: "Cargo.toml" },
+      }),
+    ).resolves.toStrictEqual(["inline", "dotted", "featured", "table"]);
   });
 
   it("Finds an inherited dependency in a dev, build, or per-platform table", async () => {
@@ -73,11 +73,12 @@ describe(resolveCargoPackagesByWorkspaceDependency, () => {
 
     const packageList = ["dev", "build", "platform"].map((name) => buildCargoWorkspacePackage(directory, name));
 
-    await expect(resolveCargoPackagesByWorkspaceDependency({ depName: "serde", packageList })).resolves.toStrictEqual([
-      "dev",
-      "build",
-      "platform",
-    ]);
+    await expect(
+      resolveCargoPackagesByWorkspaceDependency({
+        packageList,
+        upgrade: { depName: "serde", depType: "workspace.dependencies", manager: "cargo", packageFile: "Cargo.toml" },
+      }),
+    ).resolves.toStrictEqual(["dev", "build", "platform"]);
   });
 
   it("Ignores a target table whose entry isn't a table at all", async () => {
@@ -92,7 +93,10 @@ describe(resolveCargoPackagesByWorkspaceDependency, () => {
     const cargoPackageList = ["scalar", "heir"].map((name) => buildCargoWorkspacePackage(directory, name));
 
     await expect(
-      resolveCargoPackagesByWorkspaceDependency({ depName: "serde", packageList: cargoPackageList }),
+      resolveCargoPackagesByWorkspaceDependency({
+        packageList: cargoPackageList,
+        upgrade: { depName: "serde", depType: "workspace.dependencies", manager: "cargo", packageFile: "Cargo.toml" },
+      }),
     ).resolves.toStrictEqual(["heir"]);
   });
 
@@ -102,8 +106,11 @@ describe(resolveCargoPackagesByWorkspaceDependency, () => {
     const directory = await createWorkspace({ "packages/broken/Cargo.toml": "[dependencies\nserde = " });
     const packageList = [buildCargoWorkspacePackage(directory, "broken")];
 
-    await expect(resolveCargoPackagesByWorkspaceDependency({ depName: "serde", packageList })).rejects.toThrow(
-      /Couldn't parse .*Cargo\.toml/u,
-    );
+    await expect(
+      resolveCargoPackagesByWorkspaceDependency({
+        packageList,
+        upgrade: { depName: "serde", depType: "workspace.dependencies", manager: "cargo", packageFile: "Cargo.toml" },
+      }),
+    ).rejects.toThrow(/Couldn't parse .*Cargo\.toml/u);
   });
 });
