@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 
 import type { Package } from "@manypkg/get-packages";
@@ -14,6 +14,32 @@ type CargoDependencyTable = Record<string, CargoDependency>;
 type CargoPlatform = Partial<Record<(typeof cargoDependencySectionList)[number], CargoDependencyTable>>;
 type CargoManifest = CargoPlatform & { target?: Record<string, CargoPlatform> };
 
+const findCargoManifestFilePathList = async ({
+  fileDirectory,
+  packageFileDirectories,
+}: {
+  fileDirectory: string;
+  packageFileDirectories: Set<string>;
+}): Promise<string[]> => {
+  const entryList = await readdir(fileDirectory, { withFileTypes: true });
+
+  const nestedFilePathList = await Promise.all(
+    entryList.map(async (entry) => {
+      const filePath = path.join(fileDirectory, entry.name);
+
+      if (!entry.isDirectory()) {
+        return entry.name === "Cargo.toml" ? [filePath] : [];
+      }
+
+      return ["node_modules", "target"].includes(entry.name) || packageFileDirectories.has(path.resolve(filePath))
+        ? []
+        : findCargoManifestFilePathList({ fileDirectory: filePath, packageFileDirectories });
+    }),
+  );
+
+  return nestedFilePathList.flat();
+};
+
 export const resolveCargoPackagesByWorkspaceDependency = async ({
   packageList,
   upgrade,
@@ -21,40 +47,48 @@ export const resolveCargoPackagesByWorkspaceDependency = async ({
   packageList: Package[];
   upgrade: Upgrade;
 }): Promise<string[] | null> => {
-  const packageOrDepName = upgrade.packageName ?? upgrade.depName ?? null;
+  const depName = upgrade.depName ?? null;
 
-  if (packageOrDepName === null || upgrade.depType !== "workspace.dependencies") {
+  if (depName === null || upgrade.depType !== "workspace.dependencies") {
     return null;
   }
 
+  const packageFileDirectories = new Set(packageList.map((_package) => path.resolve(_package.dir)));
+
   const packageNameList = await Promise.all(
     packageList.map(async (_package) => {
-      const manifestFilePath = path.join(_package.dir, "Cargo.toml");
-      const manifestContent = await readFile(manifestFilePath, "utf8").catch(() => null);
+      const manifestFilePathList = await findCargoManifestFilePathList({
+        fileDirectory: _package.dir,
+        packageFileDirectories: new Set(
+          [...packageFileDirectories].filter((_fileDirectory) => _fileDirectory !== path.resolve(_package.dir)),
+        ),
+      });
 
-      if (manifestContent === null) {
-        return null;
-      }
+      const inheritsWorkspaceDependencyList = await Promise.all(
+        manifestFilePathList.map(async (manifestFilePath) => {
+          const manifestContent = await readFile(manifestFilePath, "utf8");
 
-      try {
-        const manifest: CargoManifest = parseToml(manifestContent);
+          try {
+            const manifest: CargoManifest = parseToml(manifestContent);
 
-        const dependencyTableList = [
-          ...cargoDependencySectionList.map((sectionName) => manifest[sectionName]),
-          ...Object.values(manifest.target ?? {}).flatMap((platformSection) =>
-            cargoDependencySectionList.map((sectionName) => platformSection[sectionName]),
-          ),
-        ];
+            const dependencyTableList = [
+              ...cargoDependencySectionList.map((sectionName) => manifest[sectionName]),
+              ...Object.values(manifest.target ?? {}).flatMap((platformSection) =>
+                cargoDependencySectionList.map((sectionName) => platformSection[sectionName]),
+              ),
+            ];
 
-        const inheritsWorkspaceDependency = dependencyTableList.some((table) => {
-          const entry = table?.[packageOrDepName];
-          return typeof entry === "object" && entry.workspace === true;
-        });
+            return dependencyTableList.some((table) => {
+              const entry = table?.[depName];
+              return typeof entry === "object" && entry.workspace === true;
+            });
+          } catch (error) {
+            throw new Error(`Couldn't parse ${manifestFilePath}.`, { cause: error });
+          }
+        }),
+      );
 
-        return inheritsWorkspaceDependency ? _package.packageJson.name : null;
-      } catch (error) {
-        throw new Error(`Couldn't parse ${manifestFilePath}.`, { cause: error });
-      }
+      return inheritsWorkspaceDependencyList.some(Boolean) ? _package.packageJson.name : null;
     }),
   );
 

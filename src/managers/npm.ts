@@ -11,9 +11,9 @@ export const resolveNpmPackagesByCatalogDependency = ({
   packageList: Package[];
   upgrade: Upgrade;
 }): string[] | null => {
-  const packageOrDepName = upgrade.packageName ?? upgrade.depName ?? null;
+  const depName = upgrade.depName ?? null;
 
-  if (packageOrDepName === null) {
+  if (depName === null) {
     return null;
   }
 
@@ -25,7 +25,7 @@ export const resolveNpmPackagesByCatalogDependency = ({
     : packageList
         .filter((_package) =>
           dependencyGroupList.some((dependencyGroup) => {
-            const version = _package.packageJson[dependencyGroup]?.[packageOrDepName];
+            const version = _package.packageJson[dependencyGroup]?.[depName];
             return (version === "catalog:" ? "catalog:default" : version) === `catalog:${catalogName}`;
           }),
         )

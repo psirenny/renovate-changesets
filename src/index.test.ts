@@ -6,26 +6,38 @@ import path from "node:path";
 import { fc, test as propertyTest } from "@fast-check/vitest";
 import { configure, getLogger, reset } from "@logtape/logtape";
 import { createLogRecorder } from "@logtape/testing/recorder";
-import type { Package } from "@manypkg/get-packages";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 
 import {
   configureLogger,
-  defaultTemplate,
-  resolvePackagesBySharedUpgrade,
   findWorkspacePackages,
   main,
-  resolvePackageByUpgrade,
   run,
   writeChangesets,
-  type Upgrade,
   type PackageUpgrade,
+  type Upgrade,
 } from "./index.js";
 
 const encodeJson = (json: unknown): string => Buffer.from(JSON.stringify(json), "utf8").toString("base64");
 
 const removeWorkspace = async ({ fileDirectory }: { fileDirectory: string }): Promise<void> => {
   await rm(fileDirectory, { force: true, recursive: true });
+};
+
+const writeFileMap = async ({
+  fileDirectory,
+  fileMap,
+}: {
+  fileDirectory: string;
+  fileMap: Record<string, string>;
+}): Promise<void> => {
+  await Promise.all(
+    Object.entries(fileMap).map(async ([relativeFilePath, content]) => {
+      const filePath = path.join(fileDirectory, relativeFilePath);
+      await mkdir(path.dirname(filePath), { recursive: true });
+      await writeFile(filePath, content);
+    }),
+  );
 };
 
 const createWorkspace = async ({ fileMap }: { fileMap: Record<string, string> }): Promise<string> => {
@@ -35,13 +47,7 @@ const createWorkspace = async ({ fileMap }: { fileMap: Record<string, string> })
     await removeWorkspace({ fileDirectory });
   });
 
-  await Promise.all(
-    Object.entries(fileMap).map(async ([relativeFilePath, content]) => {
-      const filePath = path.join(fileDirectory, relativeFilePath);
-      await mkdir(path.dirname(filePath), { recursive: true });
-      await writeFile(filePath, content);
-    }),
-  );
+  await writeFileMap({ fileDirectory, fileMap });
 
   return fileDirectory;
 };
@@ -65,18 +71,6 @@ const readChangesets = async ({
   );
 };
 
-const buildPackage = ({
-  name,
-  packageJson = {},
-}: {
-  name: string;
-  packageJson?: Record<string, unknown>;
-}): Package => ({
-  dir: path.join(process.cwd(), "packages", name),
-  packageJson: { name, version: "1.0.0", ...packageJson },
-  relativeDir: `packages/${name}`,
-});
-
 const createChangeset = async ({
   resolvedUpgrade,
   template,
@@ -89,21 +83,6 @@ const createChangeset = async ({
   const [changeset] = await readChangesets({ fileDirectory });
   return changeset?.content ?? "";
 };
-
-const ROOT_DIRECTORY = path.resolve("/workspace");
-
-const buildOwnedPackage = ({ name, relativeDir }: { name: string; relativeDir: string }): Package => ({
-  dir: path.join(ROOT_DIRECTORY, relativeDir),
-  packageJson: { name, version: "1.0.0" },
-  relativeDir,
-});
-
-const PACKAGE_LIST = [
-  buildOwnedPackage({ name: "@fixture/app", relativeDir: "packages/app" }),
-  buildOwnedPackage({ name: "@fixture/parent", relativeDir: "packages/parent" }),
-  buildOwnedPackage({ name: "@fixture/child", relativeDir: "packages/parent/child" }),
-  buildOwnedPackage({ name: "@fixture/app-extras", relativeDir: "packages/app-extras" }),
-];
 
 describe(findWorkspacePackages, () => {
   it("Fails when the repository has no Changesets config, which this tool exists to write for", async () => {
@@ -122,280 +101,6 @@ describe(findWorkspacePackages, () => {
 });
 
 // Unreviewed
-const resolveOwner = ({
-  packageFile,
-  packageList = PACKAGE_LIST,
-}: {
-  packageFile: string;
-  packageList?: Package[];
-}): string | null => resolvePackageByUpgrade({ cwd: ROOT_DIRECTORY, packageList, upgrade: { packageFile } });
-
-describe(resolvePackageByUpgrade, () => {
-  it("Gives a package its own manifest", () => {
-    expect.hasAssertions();
-
-    expect(resolveOwner({ packageFile: "packages/app/package.json" })).toBe("@fixture/app");
-  });
-
-  it("Gives a package a manifest nested inside it", () => {
-    expect.hasAssertions();
-
-    expect(resolveOwner({ packageFile: "packages/app/docker/docker-compose.yaml" })).toBe("@fixture/app");
-  });
-
-  it("Gives a nested package its own manifests rather than the parent's", () => {
-    expect.hasAssertions();
-
-    expect(resolveOwner({ packageFile: "packages/parent/child/package.json" })).toBe("@fixture/child");
-  });
-
-  it("Still gives the parent the manifests that aren't inside the nested package", () => {
-    expect.hasAssertions();
-
-    expect(resolveOwner({ packageFile: "packages/parent/Dockerfile" })).toBe("@fixture/parent");
-  });
-
-  it("Doesn't let a sibling whose name shares a prefix claim the manifest", () => {
-    expect.hasAssertions();
-
-    expect(resolveOwner({ packageFile: "packages/app-extras/package.json" })).toBe("@fixture/app-extras");
-  });
-
-  it("Gives a repository-root manifest to nobody", () => {
-    expect.hasAssertions();
-
-    expect(resolveOwner({ packageFile: "mise.toml" })).toBeNull();
-    expect(resolveOwner({ packageFile: "pnpm-workspace.yaml" })).toBeNull();
-    expect(resolveOwner({ packageFile: ".github/workflows/ci.yaml" })).toBeNull();
-  });
-
-  it("Gives a manifest in an unrelated fileDirectory to nobody", () => {
-    expect.hasAssertions();
-
-    expect(resolveOwner({ packageFile: "packages/not-a-package/package.json" })).toBeNull();
-  });
-
-  it("Gives everything to the one package in a single-package repository", () => {
-    expect.hasAssertions();
-
-    const singlePackageList = [buildOwnedPackage({ name: "solo", relativeDir: "." })];
-
-    expect(resolveOwner({ packageFile: "package.json", packageList: singlePackageList })).toBe("solo");
-    expect(resolveOwner({ packageFile: "mise.toml", packageList: singlePackageList })).toBe("solo");
-    expect(resolveOwner({ packageFile: "docker/Dockerfile", packageList: singlePackageList })).toBe("solo");
-  });
-});
-
-describe(resolvePackagesBySharedUpgrade, () => {
-  const packageList = [
-    buildPackage({ name: "catalogued", packageJson: { dependencies: { turbo: "catalog:shared-dev" } } }),
-    buildPackage({ name: "declares", packageJson: { dependencies: { turbo: "^2.10.10" } } }),
-  ];
-
-  it("Expands a pnpm catalog to its consumers", async () => {
-    expect.hasAssertions();
-
-    await expect(
-      resolvePackagesBySharedUpgrade({
-        hasOwningPackage: false,
-        packageList,
-        upgrade: { depName: "turbo", depType: "pnpm.catalog.shared-dev", packageFile: "pnpm-workspace.yaml" },
-      }),
-    ).resolves.toStrictEqual(["catalogued"]);
-  });
-
-  it("Expands a Yarn catalog the same way", async () => {
-    expect.hasAssertions();
-
-    await expect(
-      resolvePackagesBySharedUpgrade({
-        hasOwningPackage: false,
-        packageList,
-        upgrade: { depName: "turbo", depType: "yarn.catalog.shared-dev", packageFile: ".yarnrc.yml" },
-      }),
-    ).resolves.toStrictEqual(["catalogued"]);
-  });
-
-  it("Expands a catalog even when the root happens to be a workspace package", async () => {
-    expect.hasAssertions();
-
-    await expect(
-      resolvePackagesBySharedUpgrade({
-        hasOwningPackage: true,
-        packageList,
-        upgrade: { depName: "turbo", depType: "pnpm.catalog.shared-dev", packageFile: "pnpm-workspace.yaml" },
-      }),
-    ).resolves.toStrictEqual(["catalogued"]);
-  });
-
-  it.each(["overrides", "pnpm.overrides", "pnpm-workspace.overrides", "resolutions"])(
-    "Expands %s only when no package owns the manifest",
-    async (depType) => {
-      expect.hasAssertions();
-
-      // Drawing a dependency from a catalog is still declaring it, so an override pinning it reaches both packages.
-      await expect(
-        resolvePackagesBySharedUpgrade({
-          hasOwningPackage: false,
-          packageList,
-          upgrade: { depName: "turbo", depType, packageFile: "package.json" },
-        }),
-      ).resolves.toStrictEqual(["catalogued", "declares"]);
-      await expect(
-        resolvePackagesBySharedUpgrade({
-          hasOwningPackage: true,
-          packageList,
-          upgrade: { depName: "turbo", depType, packageFile: "package.json" },
-        }),
-      ).resolves.toBeNull();
-    },
-  );
-
-  it("Leaves an override that pins something transitive to nobody", async () => {
-    expect.hasAssertions();
-
-    await expect(
-      resolvePackagesBySharedUpgrade({
-        hasOwningPackage: false,
-        packageList,
-        upgrade: { depName: "minimatch", depType: "overrides", packageFile: "package.json" },
-      }),
-    ).resolves.toStrictEqual([]);
-  });
-
-  it("Leaves an ordinary dependency to ownership", async () => {
-    expect.hasAssertions();
-
-    await expect(
-      resolvePackagesBySharedUpgrade({
-        hasOwningPackage: false,
-        packageList,
-        upgrade: { depName: "turbo", depType: "devDependencies", packageFile: "package.json" },
-      }),
-    ).resolves.toBeNull();
-  });
-
-  it("Expands a Cargo workspace declaration to the crates that inherit it", async () => {
-    expect.hasAssertions();
-
-    const fileDirectory = await createWorkspace({
-      fileMap: {
-        "packages/heir/Cargo.toml": '[package]\nname = "heir"\n\n[dependencies]\nserde.workspace = true\n',
-        "packages/pinned/Cargo.toml": '[package]\nname = "pinned"\n\n[dependencies]\nserde = "1.0.0"\n',
-      },
-    });
-    const cargoPackageList: Package[] = [
-      {
-        dir: path.join(fileDirectory, "packages/heir"),
-        packageJson: { name: "heir", version: "1.0.0" },
-        relativeDir: "packages/heir",
-      },
-      {
-        dir: path.join(fileDirectory, "packages/pinned"),
-        packageJson: { name: "pinned", version: "1.0.0" },
-        relativeDir: "packages/pinned",
-      },
-    ];
-
-    await expect(
-      resolvePackagesBySharedUpgrade({
-        hasOwningPackage: false,
-        packageList: cargoPackageList,
-        upgrade: { depName: "serde", depType: "workspace.dependencies", manager: "cargo", packageFile: "Cargo.toml" },
-      }),
-    ).resolves.toStrictEqual(["heir"]);
-  });
-
-  it("Leaves a workspace.dependencies upgrade from another manager to ownership", async () => {
-    expect.hasAssertions();
-
-    const fileDirectory = await createWorkspace({
-      fileMap: {
-        "packages/heir/Cargo.toml": '[package]\nname = "heir"\n\n[dependencies]\nserde.workspace = true\n',
-      },
-    });
-
-    await expect(
-      resolvePackagesBySharedUpgrade({
-        hasOwningPackage: false,
-        packageList: [
-          {
-            dir: path.join(fileDirectory, "packages/heir"),
-            packageJson: { name: "heir", version: "1.0.0" },
-            relativeDir: "packages/heir",
-          },
-        ],
-        upgrade: {
-          depName: "serde",
-          depType: "workspace.dependencies",
-          manager: "not-cargo",
-          packageFile: "Cargo.toml",
-        },
-      }),
-    ).resolves.toBeNull();
-  });
-
-  it("Leaves a workspace.dependencies upgrade Renovate credited to no manager to ownership", async () => {
-    expect.hasAssertions();
-
-    const fileDirectory = await createWorkspace({
-      fileMap: {
-        "packages/heir/Cargo.toml": '[package]\nname = "heir"\n\n[dependencies]\nserde.workspace = true\n',
-      },
-    });
-
-    await expect(
-      resolvePackagesBySharedUpgrade({
-        hasOwningPackage: false,
-        packageList: [
-          {
-            dir: path.join(fileDirectory, "packages/heir"),
-            packageJson: { name: "heir", version: "1.0.0" },
-            relativeDir: "packages/heir",
-          },
-        ],
-        upgrade: { depName: "serde", depType: "workspace.dependencies", packageFile: "Cargo.toml" },
-      }),
-    ).resolves.toBeNull();
-  });
-
-  it("Leaves a Cargo lockfile refresh, which carries no dependency name, to ownership", async () => {
-    expect.hasAssertions();
-
-    await expect(
-      resolvePackagesBySharedUpgrade({
-        hasOwningPackage: true,
-        packageList,
-        upgrade: { manager: "cargo", packageFile: "Cargo.toml", updateType: "lockFileMaintenance" },
-      }),
-    ).resolves.toBeNull();
-  });
-
-  it("Leaves an upgrade with no dependency type to ownership", async () => {
-    expect.hasAssertions();
-
-    await expect(
-      resolvePackagesBySharedUpgrade({
-        hasOwningPackage: false,
-        packageList,
-        upgrade: { depName: "turbo", packageFile: "package.json" },
-      }),
-    ).resolves.toBeNull();
-  });
-
-  it("Leaves an upgrade with no dependency name to ownership", async () => {
-    expect.hasAssertions();
-
-    await expect(
-      resolvePackagesBySharedUpgrade({
-        hasOwningPackage: false,
-        packageList,
-        upgrade: { depType: "pnpm.catalog.shared-dev", packageFile: "pnpm-workspace.yaml" },
-      }),
-    ).resolves.toBeNull();
-  });
-});
-
 // Unreviewed
 const buildResolvedUpgrade = (overrides: Partial<PackageUpgrade> = {}): PackageUpgrade => ({
   changesetPackageName: "@fixture/app",
@@ -427,7 +132,6 @@ const createFixtureChangeset = async ({
   overrides?: Partial<PackageUpgrade>;
   template: string;
 }): Promise<string> => createChangeset({ resolvedUpgrade: buildResolvedUpgrade(overrides), template });
-
 describe(writeChangesets, () => {
   it("Interpolates a variable", async () => {
     expect.hasAssertions();
@@ -630,216 +334,6 @@ describe(writeChangesets, () => {
   });
 });
 
-describe("Default template", () => {
-  it("Names both display values of an ordinary update", async () => {
-    expect.hasAssertions();
-
-    await expect(createChangeset({ resolvedUpgrade: buildResolvedUpgrade(), template: defaultTemplate })).resolves.toBe(
-      '---\n"@fixture/app": patch\n---\n\nUpdated [ky](https://github.com/sindresorhus/ky) from `^2.0.2` to `^3.0.0`.\n',
-    );
-  });
-
-  it("Falls back to the dependency name when Renovate omitted the package name", async () => {
-    expect.hasAssertions();
-
-    await expect(
-      createChangeset({
-        resolvedUpgrade: {
-          changesetPackageName: "@fixture/app",
-          depName: "ky",
-          displayFrom: "^2.0.2",
-          displayTo: "^3.0.0",
-          packageFile: "packages/app/package.json",
-        },
-        template: defaultTemplate,
-      }),
-    ).resolves.toBe('---\n"@fixture/app": patch\n---\n\nUpdated `ky` from `^2.0.2` to `^3.0.0`.\n');
-  });
-
-  it("Names the manager for a lockfile refresh", async () => {
-    expect.hasAssertions();
-
-    await expect(
-      createChangeset({
-        resolvedUpgrade: {
-          changesetPackageName: "@fixture/app",
-          isLockFileMaintenance: true,
-          manager: "npm",
-          packageFile: "packages/app/package.json",
-          updateType: "lockFileMaintenance",
-        },
-        template: defaultTemplate,
-      }),
-    ).resolves.toBe('---\n"@fixture/app": patch\n---\n\nUpdated the `npm` lockfile.\n');
-  });
-
-  it("Omits the from side when Renovate has nothing to display there", async () => {
-    expect.hasAssertions();
-
-    await expect(
-      createChangeset({ resolvedUpgrade: buildResolvedUpgrade({ displayFrom: "" }), template: defaultTemplate }),
-    ).resolves.toBe(
-      '---\n"@fixture/app": patch\n---\n\nUpdated [ky](https://github.com/sindresorhus/ky) to `^3.0.0`.\n',
-    );
-  });
-
-  it("Tags a vulnerability-alert upgrade with its severity", async () => {
-    expect.hasAssertions();
-
-    await expect(
-      createChangeset({
-        resolvedUpgrade: buildResolvedUpgrade({ isVulnerabilityAlert: true, vulnerabilitySeverity: "HIGH" }),
-        template: defaultTemplate,
-      }),
-    ).resolves.toBe(
-      '---\n"@fixture/app": patch\n---\n\nUpdated [ky](https://github.com/sindresorhus/ky) from `^2.0.2` to `^3.0.0`. [Security: HIGH]\n',
-    );
-  });
-
-  it("Tags a vulnerability alert that carries no severity as plain Security", async () => {
-    expect.hasAssertions();
-
-    await expect(
-      createChangeset({
-        resolvedUpgrade: buildResolvedUpgrade({ isVulnerabilityAlert: true }),
-        template: defaultTemplate,
-      }),
-    ).resolves.toBe(
-      '---\n"@fixture/app": patch\n---\n\nUpdated [ky](https://github.com/sindresorhus/ky) from `^2.0.2` to `^3.0.0`. [Security]\n',
-    );
-  });
-
-  it("Composes the security tag with the other sentences", async () => {
-    expect.hasAssertions();
-
-    const content = await createChangeset({
-      resolvedUpgrade: buildResolvedUpgrade({
-        displayTo: "2.0.2",
-        isPin: true,
-        isVulnerabilityAlert: true,
-        newValue: "2.0.2",
-        newVersion: "2.0.2",
-        updateType: "pin",
-        vulnerabilitySeverity: "CRITICAL",
-      }),
-      template: defaultTemplate,
-    });
-
-    expect(content).toBe(
-      '---\n"@fixture/app": patch\n---\n\nPinned [ky](https://github.com/sindresorhus/ky) to `2.0.2`. [Security: CRITICAL]\n',
-    );
-  });
-
-  it("Falls back to backticks when the datasource knows no sourceUrl", async () => {
-    expect.hasAssertions();
-
-    await expect(
-      createChangeset({ resolvedUpgrade: buildResolvedUpgrade({ sourceUrl: null }), template: defaultTemplate }),
-    ).resolves.toBe('---\n"@fixture/app": patch\n---\n\nUpdated `ky` from `^2.0.2` to `^3.0.0`.\n');
-  });
-
-  it("Names the arriving dependency on a replacement", async () => {
-    expect.hasAssertions();
-
-    const content = await createChangeset({
-      resolvedUpgrade: buildResolvedUpgrade({
-        displayTo: "3.0.0",
-        isReplacement: true,
-        newName: "some-fork",
-        newValue: "3.0.0",
-        newVersion: null,
-        updateType: "replacement",
-      }),
-      template: defaultTemplate,
-    });
-
-    expect(content).toBe('---\n"@fixture/app": patch\n---\n\nReplaced `ky` with `some-fork` `3.0.0`.\n');
-  });
-
-  it("Doesn't read a rollback as an upgrade", async () => {
-    expect.hasAssertions();
-
-    const content = await createChangeset({
-      resolvedUpgrade: buildResolvedUpgrade({
-        currentVersion: "2.10.11",
-        depName: "turbo",
-        displayFrom: "2.10.11",
-        displayTo: "2.10.10",
-        isRollback: true,
-        newVersion: "2.10.10",
-        packageName: "turbo",
-        sourceUrl: null,
-        updateType: "rollback",
-      }),
-      template: defaultTemplate,
-    });
-
-    expect(content).toBe('---\n"@fixture/app": patch\n---\n\nRolled back `turbo` to `2.10.10`.\n');
-  });
-
-  it("Pins a dependency rather than reading the narrowed range as an update", async () => {
-    expect.hasAssertions();
-
-    const content = await createChangeset({
-      resolvedUpgrade: buildResolvedUpgrade({
-        displayTo: "2.0.2",
-        isPin: true,
-        newValue: "2.0.2",
-        newVersion: "2.0.2",
-        updateType: "pin",
-      }),
-      template: defaultTemplate,
-    });
-
-    expect(content).toBe(
-      '---\n"@fixture/app": patch\n---\n\nPinned [ky](https://github.com/sindresorhus/ky) to `2.0.2`.\n',
-    );
-  });
-
-  it("Pins a digest the same way, with no from side on a first pin", async () => {
-    expect.hasAssertions();
-
-    const content = await createChangeset({
-      resolvedUpgrade: buildResolvedUpgrade({
-        depName: "actions/checkout",
-        displayFrom: "",
-        displayTo: "3d3c42e",
-        isPinDigest: true,
-        newDigest: "3d3c42e5aac5ba805825da76410c181273ba90b1",
-        newValue: "v7.0.1",
-        packageName: "actions/checkout",
-        sourceUrl: null,
-        updateType: "pinDigest",
-      }),
-      template: defaultTemplate,
-    });
-
-    expect(content).toBe('---\n"@fixture/app": patch\n---\n\nPinned `actions/checkout` to `3d3c42e`.\n');
-  });
-
-  it("Names both digests on a digest update", async () => {
-    expect.hasAssertions();
-
-    const content = await createChangeset({
-      resolvedUpgrade: buildResolvedUpgrade({
-        currentDigest: "sha256:032b412aaaaaaaaa",
-        currentVersion: null,
-        depName: "timescaledb",
-        displayFrom: "032b412",
-        displayTo: "cf49c5d",
-        newDigest: "sha256:cf49c5dbbbbbbbbb",
-        newVersion: null,
-        packageName: "timescaledb",
-        sourceUrl: null,
-        updateType: "digest",
-      }),
-      template: defaultTemplate,
-    });
-
-    expect(content).toBe('---\n"@fixture/app": patch\n---\n\nUpdated `timescaledb` from `032b412` to `cf49c5d`.\n');
-  });
-});
-
 // Unreviewed
 /** The `.changeset/config.json` a fixture needs before `readConfig` will look at it. */
 const buildChangesetConfig = (overrides: Record<string, unknown> = {}): string =>
@@ -890,552 +384,6 @@ const runIn = async ({
 };
 
 describe(run, () => {
-  it("Writes one changeset for a dependency inside a package", async () => {
-    expect.hasAssertions();
-
-    const fileDirectory = await createTemporaryWorkspace({
-      fileMap: {
-        "package.json": serializePackageJson({ value: { name: "root", private: true, version: "0.0.0" } }),
-        "packages/app/package.json": serializePackageJson({ value: { name: "@fixture/app", version: "1.0.0" } }),
-        "pnpm-workspace.yaml": buildPnpmWorkspace({ relativeDirList: ["packages/app"] }),
-      },
-    });
-
-    await runIn({
-      fileDirectory,
-      upgradeList: [
-        {
-          currentVersion: "1.10.10",
-          depName: "oxlint",
-          depType: "devDependencies",
-          displayFrom: "1.10.10",
-          displayTo: "2.10.11",
-          newVersion: "2.10.11",
-          packageFile: "packages/app/package.json",
-          packageName: "oxlint",
-          updateType: "major",
-        },
-      ],
-    });
-
-    const changesetList = await readChangesets({ fileDirectory });
-
-    expect(changesetList.map(({ content }) => content)).toStrictEqual([
-      '---\n"@fixture/app": patch\n---\n\nUpdated `oxlint` from `1.10.10` to `2.10.11`.\n',
-    ]);
-    expect(changesetList[0]?.fileName).toMatch(/^renovate-[\da-f]{8}\.md$/u);
-  });
-
-  it("Writes nothing for a manifest that belongs to no package", async () => {
-    expect.hasAssertions();
-
-    const fileDirectory = await createTemporaryWorkspace({
-      fileMap: {
-        "package.json": serializePackageJson({ value: { name: "root", private: true, version: "0.0.0" } }),
-        "packages/app/package.json": serializePackageJson({ value: { name: "@fixture/app", version: "1.0.0" } }),
-        "pnpm-workspace.yaml": buildPnpmWorkspace({ relativeDirList: ["packages/app"] }),
-      },
-    });
-
-    await runIn({
-      fileDirectory,
-      upgradeList: [
-        {
-          currentVersion: "0.2.337",
-          depName: "chainctl",
-          displayFrom: "0.2.337",
-          displayTo: "0.2.338",
-          newVersion: "0.2.338",
-          packageFile: "mise.toml",
-        },
-        {
-          currentDigest: "sha256:aaaaaaabbbbbbb",
-          depName: "actions/checkout",
-          displayFrom: "aaaaaaa",
-          displayTo: "ccccccc",
-          newDigest: "sha256:cccccccddddddd",
-          packageFile: ".github/workflows/ci.yaml",
-          packageName: "actions/checkout",
-          updateType: "digest",
-        },
-      ],
-    });
-
-    await expect(readChangesets({ fileDirectory })).resolves.toStrictEqual([]);
-  });
-
-  it("Expands a catalog entry to every package that draws from it", async () => {
-    expect.hasAssertions();
-
-    const fileDirectory = await createTemporaryWorkspace({
-      fileMap: {
-        "package.json": serializePackageJson({ value: { name: "root", private: true, version: "0.0.0" } }),
-        "packages/bystander/package.json": serializePackageJson({
-          value: {
-            dependencies: { turbo: "catalog:" },
-            name: "@fixture/bystander",
-            version: "1.0.0",
-          },
-        }),
-        "packages/consumer-a/package.json": serializePackageJson({
-          value: {
-            dependencies: { turbo: "catalog:shared-dev" },
-            name: "@fixture/consumer-a",
-            version: "1.0.0",
-          },
-        }),
-        "packages/consumer-b/package.json": serializePackageJson({
-          value: {
-            devDependencies: { turbo: "catalog:shared-dev" },
-            name: "@fixture/consumer-b",
-            version: "1.0.0",
-          },
-        }),
-        "pnpm-workspace.yaml": buildPnpmWorkspace({
-          relativeDirList: ["packages/consumer-a", "packages/consumer-b", "packages/bystander"],
-        }),
-      },
-    });
-
-    await runIn({
-      fileDirectory,
-      upgradeList: [
-        {
-          currentVersion: "2.10.10",
-          depName: "turbo",
-          depType: "pnpm.catalog.shared-dev",
-          displayFrom: "2.10.10",
-          displayTo: "2.10.11",
-          newVersion: "2.10.11",
-          packageFile: "pnpm-workspace.yaml",
-          packageName: "turbo",
-          updateType: "patch",
-        },
-      ],
-    });
-
-    const changesetList = await readChangesets({ fileDirectory });
-    const contentList = changesetList.map((changeset) => changeset.content);
-
-    expect(contentList.toSorted()).toStrictEqual([
-      '---\n"@fixture/consumer-a": patch\n---\n\nUpdated `turbo` from `2.10.10` to `2.10.11`.\n',
-      '---\n"@fixture/consumer-b": patch\n---\n\nUpdated `turbo` from `2.10.10` to `2.10.11`.\n',
-    ]);
-  });
-
-  it("Skips a package Changesets wouldn't version", async () => {
-    expect.hasAssertions();
-
-    const fileDirectory = await createTemporaryWorkspace({
-      fileMap: {
-        ".changeset/config.json": buildChangesetConfig({
-          ignore: ["@fixture/ignored"],
-          privatePackages: { tag: false, version: false },
-        }),
-        "package.json": serializePackageJson({ value: { name: "root", private: true, version: "0.0.0" } }),
-        "packages/ignored/package.json": serializePackageJson({
-          value: { name: "@fixture/ignored", version: "1.0.0" },
-        }),
-        "packages/private/package.json": serializePackageJson({
-          value: {
-            name: "@fixture/private",
-            private: true,
-            version: "1.0.0",
-          },
-        }),
-        "packages/public/package.json": serializePackageJson({ value: { name: "@fixture/public", version: "1.0.0" } }),
-        "pnpm-workspace.yaml": buildPnpmWorkspace({
-          relativeDirList: ["packages/ignored", "packages/private", "packages/public"],
-        }),
-      },
-    });
-
-    await runIn({
-      fileDirectory,
-      upgradeList: ["ignored", "private", "public"].map((fileDirectoryName) => ({
-        currentVersion: "1.0.0",
-        depName: `dependency-${fileDirectoryName}`,
-        displayFrom: "1.0.0",
-        displayTo: "2.0.0",
-        newVersion: "2.0.0",
-        packageFile: `packages/${fileDirectoryName}/package.json`,
-        packageName: `dependency-${fileDirectoryName}`,
-      })),
-    });
-
-    const changesetList = await readChangesets({ fileDirectory });
-    const contentList = changesetList.map((changeset) => changeset.content);
-
-    expect(contentList).toStrictEqual([
-      '---\n"@fixture/public": patch\n---\n\nUpdated `dependency-public` from `1.0.0` to `2.0.0`.\n',
-    ]);
-  });
-
-  // `shouldSkipPackage` returns true for a package with no version, so one falls out of the workspace entirely and
-  // its manifests fall through to whichever package encloses it.
-  it("Skips a package with no version and gives its manifests to the package containing it", async () => {
-    expect.hasAssertions();
-
-    const fileDirectory = await createTemporaryWorkspace({
-      fileMap: {
-        "package.json": serializePackageJson({ value: { name: "root", private: true, version: "0.0.0" } }),
-        "packages/outer/inner/package.json": serializePackageJson({ value: { name: "@fixture/inner" } }),
-        "packages/outer/package.json": serializePackageJson({ value: { name: "@fixture/outer", version: "1.0.0" } }),
-        "pnpm-workspace.yaml": buildPnpmWorkspace({ relativeDirList: ["packages/outer", "packages/outer/inner"] }),
-      },
-    });
-
-    await runIn({
-      fileDirectory,
-      upgradeList: [
-        {
-          depName: "ky",
-          displayTo: "2.0.0",
-          newVersion: "2.0.0",
-          packageFile: "packages/outer/inner/package.json",
-          packageName: "ky",
-        },
-      ],
-    });
-
-    const changesetList = await readChangesets({ fileDirectory });
-    const contentList = changesetList.map((changeset) => changeset.content);
-
-    expect(contentList).toStrictEqual(['---\n"@fixture/outer": patch\n---\n\nUpdated `ky` to `2.0.0`.\n']);
-  });
-
-  it("Writes a changeset for an upgrade Renovate sent without a package name", async () => {
-    expect.hasAssertions();
-
-    const fileDirectory = await createTemporaryWorkspace({
-      fileMap: {
-        "package.json": serializePackageJson({ value: { name: "solo", version: "1.0.0" } }),
-      },
-    });
-
-    await runIn({
-      fileDirectory,
-      upgradeList: [
-        {
-          depName: "ky",
-          depType: "dependencies",
-          displayFrom: "^3.0.0",
-          displayTo: "^3.1.0",
-          packageFile: "package.json",
-        },
-      ],
-    });
-
-    const changesetList = await readChangesets({ fileDirectory });
-
-    expect(changesetList.map((changeset) => changeset.content)).toStrictEqual([
-      '---\n"solo": patch\n---\n\nUpdated `ky` from `^3.0.0` to `^3.1.0`.\n',
-    ]);
-  });
-
-  it("Writes a changeset for a lockfile refresh", async () => {
-    expect.hasAssertions();
-
-    const fileDirectory = await createTemporaryWorkspace({
-      fileMap: {
-        "package.json": serializePackageJson({ value: { name: "solo", version: "1.0.0" } }),
-      },
-    });
-
-    await runIn({
-      fileDirectory,
-      upgradeList: [
-        {
-          isLockFileMaintenance: true,
-          manager: "npm",
-          packageFile: "package.json",
-          updateType: "lockFileMaintenance",
-        },
-      ],
-    });
-
-    const changesetList = await readChangesets({ fileDirectory });
-
-    expect(changesetList.map((changeset) => changeset.content)).toStrictEqual([
-      '---\n"solo": patch\n---\n\nUpdated the `npm` lockfile.\n',
-    ]);
-  });
-
-  it("Gives a nested package its own manifests when Changesets would version it", async () => {
-    expect.hasAssertions();
-
-    const fileDirectory = await createTemporaryWorkspace({
-      fileMap: {
-        "package.json": serializePackageJson({ value: { name: "root", private: true, version: "0.0.0" } }),
-        "packages/outer/inner/package.json": serializePackageJson({
-          value: { name: "@fixture/inner", version: "1.0.0" },
-        }),
-        "packages/outer/package.json": serializePackageJson({ value: { name: "@fixture/outer", version: "1.0.0" } }),
-        "pnpm-workspace.yaml": buildPnpmWorkspace({ relativeDirList: ["packages/outer", "packages/outer/inner"] }),
-      },
-    });
-
-    await runIn({
-      fileDirectory,
-      upgradeList: [
-        {
-          depName: "ky",
-          displayTo: "2.0.0",
-          newVersion: "2.0.0",
-          packageFile: "packages/outer/inner/package.json",
-          packageName: "ky",
-        },
-        {
-          depName: "turbo",
-          displayTo: "3.0.0",
-          newVersion: "3.0.0",
-          packageFile: "packages/outer/Dockerfile",
-          packageName: "turbo",
-        },
-      ],
-    });
-
-    const changesetList = await readChangesets({ fileDirectory });
-    const contentList = changesetList.map((changeset) => changeset.content);
-
-    expect(contentList.toSorted()).toStrictEqual([
-      '---\n"@fixture/inner": patch\n---\n\nUpdated `ky` to `2.0.0`.\n',
-      '---\n"@fixture/outer": patch\n---\n\nUpdated `turbo` to `3.0.0`.\n',
-    ]);
-  });
-
-  it("Gives everything to the one package in a single-package repository", async () => {
-    expect.hasAssertions();
-
-    const fileDirectory = await createTemporaryWorkspace({
-      fileMap: {
-        "package.json": serializePackageJson({ value: { name: "solo", version: "1.0.0" } }),
-      },
-    });
-
-    await runIn({
-      fileDirectory,
-      upgradeList: [
-        {
-          currentVersion: "1.0.0",
-          depName: "ky",
-          displayFrom: "1.0.0",
-          displayTo: "2.0.0",
-          newVersion: "2.0.0",
-          packageFile: "package.json",
-          packageName: "ky",
-        },
-        {
-          currentVersion: "24.0.0",
-          depName: "node",
-          displayFrom: "24.0.0",
-          displayTo: "24.1.0",
-          newVersion: "24.1.0",
-          packageFile: "mise.toml",
-          packageName: "node",
-        },
-      ],
-    });
-
-    const changesetList = await readChangesets({ fileDirectory });
-    const contentList = changesetList.map((changeset) => changeset.content);
-
-    expect(contentList.toSorted()).toStrictEqual([
-      '---\n"solo": patch\n---\n\nUpdated `ky` from `1.0.0` to `2.0.0`.\n',
-      '---\n"solo": patch\n---\n\nUpdated `node` from `24.0.0` to `24.1.0`.\n',
-    ]);
-  });
-
-  // `@manypkg/find-root` only recognizes an npm, Yarn, or Bun workspace when the matching lock file is beside the
-  // root `package.json`; without it the repository is read as a single package. Renovate's clone always has one,
-  // since Renovate is the thing that just updated it.
-  it.each([
-    ["npm", "package-lock.json"],
-    ["Yarn", "yarn.lock"],
-  ])("Works the same in a %s workspace", async (_label, lockFileName) => {
-    expect.hasAssertions();
-
-    const fileDirectory = await createTemporaryWorkspace({
-      fileMap: {
-        [lockFileName]: "\n",
-        "package.json": serializePackageJson({
-          value: {
-            name: "root",
-            private: true,
-            version: "0.0.0",
-            workspaces: ["packages/*"],
-          },
-        }),
-        "packages/app/package.json": serializePackageJson({ value: { name: "@fixture/app", version: "1.0.0" } }),
-      },
-    });
-
-    await runIn({
-      fileDirectory,
-      upgradeList: [
-        {
-          currentVersion: "1.0.0",
-          depName: "ky",
-          displayFrom: "1.0.0",
-          displayTo: "2.0.0",
-          newVersion: "2.0.0",
-          packageFile: "packages/app/package.json",
-          packageName: "ky",
-        },
-      ],
-    });
-
-    const changesetList = await readChangesets({ fileDirectory });
-    const contentList = changesetList.map((changeset) => changeset.content);
-
-    expect(contentList).toStrictEqual(['---\n"@fixture/app": patch\n---\n\nUpdated `ky` from `1.0.0` to `2.0.0`.\n']);
-  });
-
-  it("Expands a Yarn catalog to its consumers", async () => {
-    expect.hasAssertions();
-
-    const fileDirectory = await createTemporaryWorkspace({
-      fileMap: {
-        "package.json": serializePackageJson({
-          value: {
-            name: "root",
-            private: true,
-            version: "0.0.0",
-            workspaces: ["packages/*"],
-          },
-        }),
-        "packages/app/package.json": serializePackageJson({
-          value: {
-            dependencies: { turbo: "catalog:shared-dev" },
-            name: "@fixture/app",
-            version: "1.0.0",
-          },
-        }),
-        "yarn.lock": "\n",
-      },
-    });
-
-    await runIn({
-      fileDirectory,
-      upgradeList: [
-        {
-          currentVersion: "2.10.10",
-          depName: "turbo",
-          depType: "yarn.catalog.shared-dev",
-          displayFrom: "2.10.10",
-          displayTo: "2.10.11",
-          newVersion: "2.10.11",
-          packageFile: "package.json",
-          packageName: "turbo",
-          updateType: "patch",
-        },
-      ],
-    });
-
-    const changesetList = await readChangesets({ fileDirectory });
-    const contentList = changesetList.map((changeset) => changeset.content);
-
-    expect(contentList).toStrictEqual([
-      '---\n"@fixture/app": patch\n---\n\nUpdated `turbo` from `2.10.10` to `2.10.11`.\n',
-    ]);
-  });
-
-  it("Writes a changeset under the clean name for a security-range override", async () => {
-    expect.hasAssertions();
-
-    const fileDirectory = await createTemporaryWorkspace({
-      fileMap: {
-        "package.json": serializePackageJson({ value: { name: "root", private: true, version: "0.0.0" } }),
-        "packages/declares/package.json": serializePackageJson({
-          value: {
-            dependencies: { minimatch: "^10.0.0" },
-            name: "@fixture/declares",
-            version: "1.0.0",
-          },
-        }),
-        "packages/unrelated/package.json": serializePackageJson({
-          value: { name: "@fixture/unrelated", version: "1.0.0" },
-        }),
-        "pnpm-workspace.yaml": buildPnpmWorkspace({ relativeDirList: ["packages/declares", "packages/unrelated"] }),
-      },
-    });
-
-    await runIn({
-      fileDirectory,
-      upgradeList: [
-        {
-          depName: "minimatch@>=10.0.0 <10.2.3",
-          depType: "pnpm-workspace.overrides",
-          displayTo: "10.2.3",
-          newValue: "10.2.3",
-          packageFile: "pnpm-workspace.yaml",
-          packageName: "minimatch",
-        },
-      ],
-    });
-
-    const changesetList = await readChangesets({ fileDirectory });
-
-    expect(changesetList.map((changeset) => changeset.content)).toStrictEqual([
-      '---\n"@fixture/declares": patch\n---\n\nUpdated `minimatch` to `10.2.3`.\n',
-    ]);
-  });
-
-  it("Uses a template the options point at", async () => {
-    expect.hasAssertions();
-
-    const fileDirectory = await createTemporaryWorkspace({
-      fileMap: {
-        ".github/changeset.md": '---\n"{{changesetPackageName}}": patch\n---\n\n{{depName}}@{{displayTo}}\n',
-        "package.json": serializePackageJson({ value: { name: "solo", version: "1.0.0" } }),
-      },
-    });
-
-    await run({
-      cwd: fileDirectory,
-      templateFilePath: ".github/changeset.md",
-      upgradeListString: encodeJson([
-        { depName: "ky", displayTo: "2.0.0", newVersion: "2.0.0", packageFile: "package.json", packageName: "ky" },
-      ]),
-    });
-
-    const changesetList = await readChangesets({ fileDirectory });
-    const contentList = changesetList.map((changeset) => changeset.content);
-
-    expect(contentList).toStrictEqual(['---\n"solo": patch\n---\n\nky@2.0.0\n']);
-  });
-
-  it("Keeps a field it doesn't name, so a template can still read it", async () => {
-    expect.hasAssertions();
-
-    const fileDirectory = await createTemporaryWorkspace({
-      fileMap: {
-        ".github/changeset.md": '---\n"{{changesetPackageName}}": patch\n---\n\n{{depNameLinked}}\n',
-        "package.json": serializePackageJson({ value: { name: "solo", version: "1.0.0" } }),
-      },
-    });
-
-    await run({
-      cwd: fileDirectory,
-      templateFilePath: ".github/changeset.md",
-      upgradeListString: encodeJson([
-        {
-          depName: "ky",
-          depNameLinked: "[ky](https://github.com/sindresorhus/ky)",
-          displayTo: "2.0.0",
-          newVersion: "2.0.0",
-          packageFile: "package.json",
-          packageName: "ky",
-        },
-      ]),
-    });
-
-    const changesetList = await readChangesets({ fileDirectory });
-    const contentList = changesetList.map((changeset) => changeset.content);
-
-    expect(contentList).toStrictEqual(['---\n"solo": patch\n---\n\n[ky](https://github.com/sindresorhus/ky)\n']);
-  });
-
   it("Fails when a template it was told to use isn't there", async () => {
     expect.hasAssertions();
 
@@ -1454,68 +402,6 @@ describe(run, () => {
         ]),
       }),
     ).rejects.toThrow(/ENOENT.*missing\.md/u);
-  });
-
-  it("Overwrites its own files on a rebase rather than accumulating a second set", async () => {
-    expect.hasAssertions();
-
-    const fileDirectory = await createTemporaryWorkspace({
-      fileMap: {
-        "package.json": serializePackageJson({ value: { name: "solo", version: "1.0.0" } }),
-      },
-    });
-    const upgradeList: Upgrade[] = [
-      {
-        currentVersion: "1.0.0",
-        depName: "ky",
-        displayFrom: "1.0.0",
-        displayTo: "2.0.0",
-        newVersion: "2.0.0",
-        packageFile: "package.json",
-        packageName: "ky",
-      },
-      {
-        currentVersion: "1.0.0",
-        depName: "turbo",
-        displayFrom: "1.0.0",
-        displayTo: "2.0.0",
-        newVersion: "2.0.0",
-        packageFile: "package.json",
-        packageName: "turbo",
-      },
-    ];
-
-    await runIn({ fileDirectory, upgradeList });
-
-    const firstChangesetList = await readChangesets({ fileDirectory });
-
-    await runIn({ fileDirectory, upgradeList });
-
-    expect(firstChangesetList).toHaveLength(2);
-    await expect(readChangesets({ fileDirectory })).resolves.toStrictEqual(firstChangesetList);
-  });
-
-  it("Names each file after a hash of its own content", async () => {
-    expect.hasAssertions();
-
-    const fileDirectory = await createTemporaryWorkspace({
-      fileMap: {
-        "package.json": serializePackageJson({ value: { name: "solo", version: "1.0.0" } }),
-      },
-    });
-
-    await runIn({
-      fileDirectory,
-      upgradeList: [
-        { depName: "ky", displayTo: "2.0.0", newVersion: "2.0.0", packageFile: "package.json", packageName: "ky" },
-      ],
-    });
-
-    for (const { content, fileName } of await readChangesets({ fileDirectory })) {
-      const hash = createHash("sha256").update(content).digest("hex").slice(0, 8);
-
-      expect(fileName).toBe(`renovate-${hash}.md`);
-    }
   });
 
   it("Fails on an undecodable payload rather than silently writing nothing", async () => {
@@ -1810,454 +696,1089 @@ describe(main, () => {
   });
 });
 
-type FixtureCatalogReference = { catalogName: string; dependencyName: string };
+type Drawn<Node> = Node extends readonly (infer Option)[]
+  ? Drawn<Option>
+  : Node extends object
+    ? { -readonly [Key in keyof Node]: Drawn<Node[Key]> }
+    : Node;
+
+const matrix = {
+  attribute: {
+    hasSourceUrl: [false, true],
+    security: [
+      { payload: {}, security: "none", tag: "" },
+      { payload: { isVulnerabilityAlert: true }, security: "alert", tag: " [Security]" },
+      {
+        payload: { isVulnerabilityAlert: true, vulnerabilitySeverity: "HIGH" },
+        security: "alert-with-severity",
+        tag: " [Security: HIGH]",
+      },
+    ],
+    updateType: [
+      {
+        payload: {
+          currentValue: "1.0.0",
+          displayFrom: "1.0.0",
+          displayTo: "1.1.0",
+          isBump: true,
+          newValue: "1.1.0",
+          updateType: "bump",
+        },
+        sentence: "Updated <subject> from `1.0.0` to `1.1.0`.",
+      },
+      {
+        payload: {
+          currentDigest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          currentDigestShort: "aaaaaaa",
+          displayFrom: "aaaaaaa",
+          displayTo: "bbbbbbb",
+          isDigest: true,
+          newDigest: "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          newDigestShort: "bbbbbbb",
+          updateType: "digest",
+        },
+        sentence: "Updated <subject> from `aaaaaaa` to `bbbbbbb`.",
+      },
+      {
+        payload: {
+          currentVersion: "1.0.0",
+          displayFrom: "1.0.0",
+          displayTo: "1.1.0",
+          isLockfileUpdate: true,
+          newVersion: "1.1.0",
+          updateType: "lockfileUpdate",
+        },
+        sentence: "Updated <subject> from `1.0.0` to `1.1.0`.",
+      },
+      {
+        payload: {
+          currentValue: "1.0.0",
+          displayFrom: "1.0.0",
+          displayTo: "2.0.0",
+          isMajor: true,
+          newValue: "2.0.0",
+          updateType: "major",
+        },
+        sentence: "Updated <subject> from `1.0.0` to `2.0.0`.",
+      },
+      {
+        payload: {
+          currentValue: "1.0.0",
+          displayFrom: "1.0.0",
+          displayTo: "1.1.0",
+          isMinor: true,
+          newValue: "1.1.0",
+          updateType: "minor",
+        },
+        sentence: "Updated <subject> from `1.0.0` to `1.1.0`.",
+      },
+      {
+        payload: {
+          currentValue: "1.0.0",
+          displayFrom: "1.0.0",
+          displayTo: "1.0.1",
+          isPatch: true,
+          newValue: "1.0.1",
+          updateType: "patch",
+        },
+        sentence: "Updated <subject> from `1.0.0` to `1.0.1`.",
+      },
+      {
+        payload: {
+          currentValue: "^1.0.0",
+          displayFrom: "^1.0.0",
+          displayTo: "1.0.0",
+          isPin: true,
+          newValue: "1.0.0",
+          updateType: "pin",
+        },
+        sentence: "Pinned <subject> to `1.0.0`.",
+      },
+      {
+        payload: {
+          displayFrom: "",
+          displayTo: "bbbbbbb",
+          isPinDigest: true,
+          newDigest: "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          newDigestShort: "bbbbbbb",
+          newValue: "1.0.0",
+          updateType: "pinDigest",
+        },
+        sentence: "Pinned <subject> to `bbbbbbb`.",
+      },
+      {
+        payload: {
+          currentValue: "1.0.0",
+          displayFrom: "1.0.0",
+          displayTo: "1.1.0",
+          isReplacement: true,
+          newName: "replacement",
+          newValue: "1.1.0",
+          updateType: "replacement",
+        },
+        sentence: "Replaced `<name>` with `replacement` `1.1.0`.",
+      },
+      {
+        payload: {
+          currentValue: "1.1.0",
+          displayFrom: "1.1.0",
+          displayTo: "1.0.0",
+          isRollback: true,
+          newValue: "1.0.0",
+          updateType: "rollback",
+        },
+        sentence: "Rolled back <subject> to `1.0.0`.",
+      },
+    ],
+  },
+  package: {
+    crate: [
+      { site: "none" },
+      {
+        site: ["beside", "nested", "node_modules", "target"],
+        syntax: ["dotted", "inline", "table"],
+        table: ["build-dependencies", "dependencies", "dev-dependencies", "target.'cfg(unix)'.dependencies"],
+      },
+    ],
+    dependencyGroup: ["dependencies", "devDependencies", "optionalDependencies", "peerDependencies"],
+    isPrivate: [false, true],
+    placement: ["beside", "nested", "prefixed"],
+  },
+  upgrade: [
+    {
+      declaration: [
+        { kind: "lockfile", manifestFileName: "package.json", sentence: "Updated the `<manager>` lockfile." },
+        {
+          depType: [
+            "dependencies",
+            "devDependencies",
+            "engines",
+            "optionalDependencies",
+            "packageManager",
+            "peerDependencies",
+            "volta",
+            "workspace.dependencies",
+          ],
+          kind: "none",
+          manifestFileName: "package.json",
+        },
+        {
+          kind: "override",
+          spelling: [
+            { depType: "overrides", packageFile: "package.json", usesSelector: false },
+            { depType: "pnpm-workspace.overrides", packageFile: "pnpm-workspace.yaml", usesSelector: [false, true] },
+            { depType: "pnpm.overrides", packageFile: "package.json", usesSelector: [false, true] },
+            { depType: "resolutions", packageFile: "package.json", usesSelector: false },
+          ],
+        },
+      ],
+      manager: ["bun", "deno", "npm"],
+    },
+    {
+      declaration: {
+        catalog: [
+          { name: "default", reference: ["catalog:", "catalog:default"] },
+          { name: "react-19", reference: "catalog:react-19" },
+        ],
+        isAliased: [false, true],
+        kind: "catalog",
+        source: [
+          { packageFile: "pnpm-workspace.yaml", spelling: "pnpm" },
+          { packageFile: ".yarnrc.yml", spelling: "yarn" },
+        ],
+      },
+      manager: "npm",
+    },
+    {
+      declaration: [
+        { kind: "lockfile", manifestFileName: "Cargo.toml", sentence: "Updated the `<manager>` lockfile." },
+        {
+          depType: ["build-dependencies", "dependencies", "dev-dependencies"],
+          kind: "none",
+          manifestFileName: "Cargo.toml",
+        },
+        { isRenamed: [false, true], kind: "workspace-dependency" },
+      ],
+      manager: "cargo",
+    },
+    [
+      { declaration: { depType: null, kind: "none", manifestFileName: ".tool-versions" }, manager: "custom.regex" },
+      {
+        declaration: { depType: null, kind: "none", manifestFileName: "docker-compose.yaml" },
+        manager: "docker-compose",
+      },
+      {
+        declaration: { depType: ["final", "stage", "syntax"], kind: "none", manifestFileName: "Dockerfile" },
+        manager: "dockerfile",
+      },
+      {
+        declaration: {
+          depType: ["action", "container", "docker", "github-runner", "service", "uses-with", "workflow"],
+          kind: "none",
+          manifestFileName: ".github/workflows/ci.yaml",
+        },
+        manager: "github-actions",
+      },
+      {
+        declaration: {
+          depType: ["golang", "indirect", "replace", "require", "tool", "toolchain"],
+          kind: "none",
+          manifestFileName: "go.mod",
+        },
+        manager: "gomod",
+      },
+      {
+        declaration: [
+          { kind: "lockfile", manifestFileName: "pyproject.toml", sentence: "Updated the `<manager>` lockfile." },
+          {
+            depType: [
+              "build-system.requires",
+              "dependency-groups",
+              "project.dependencies",
+              "project.optional-dependencies",
+              "requires-python",
+              "tool.pdm.dev-dependencies",
+              "tool.uv.dev-dependencies",
+              "tool.uv.sources",
+            ],
+            kind: "none",
+            manifestFileName: "pyproject.toml",
+          },
+        ],
+        manager: "pep621",
+      },
+    ],
+  ],
+  workspace: {
+    hasStrayCrate: [false, true],
+    kind: ["mono", "mono-with-root-as-member", "solo"],
+    privatePackagesVersion: [false, true],
+    template: ["custom", "default"],
+    tool: ["bun", "npm", "pnpm", "yarn"],
+  },
+} as const;
+
+type Attribute = Drawn<typeof matrix.attribute>;
+type PackagePlan = Drawn<typeof matrix.package>;
+type Shape = Drawn<typeof matrix.upgrade>;
+type Declaration = Shape["declaration"];
+type WorkspaceKind = Drawn<typeof matrix.workspace.kind>;
+type Site = number | "root" | "stray";
+
+type UpgradePlan = { attribute: Attribute; memberIndexList: number[]; shape: Shape; site: Site };
+
+type Plan = {
+  ignoredIndex: number;
+  packageList: PackagePlan[];
+  upgradeList: UpgradePlan[];
+  versionlessIndex: number;
+  workspace: Drawn<typeof matrix.workspace>;
+};
+
+type FixtureCrate = Exclude<PackagePlan["crate"], { site: "none" }> & { filePath: string; isPruned: boolean };
 
 type FixturePackage = {
-  catalogReferenceList: FixtureCatalogReference[];
-  dependencyGroup: "dependencies" | "devDependencies";
+  crate: FixtureCrate | null;
+  dependencyGroup: PackagePlan["dependencyGroup"];
   fileDirectoryPath: string;
   hasVersion: boolean;
   isIgnored: boolean;
   isPrivate: boolean;
-  /** Whether Changesets would version this package — the three reasons `shouldSkipPackage` says no, inverted. */
   isVersioned: boolean;
   name: string;
 };
 
-type FixtureWorkspace = {
-  catalogNameList: string[];
-  fileDirectory: string;
-  packageList: FixturePackage[];
-  versionedPackageNameList: string[];
-};
-
-/** What one package should look like. Plain data, so fast-check can shrink a failure down to a smaller workspace. */
-type FixturePackagePlan = {
-  catalogName: string | null;
-  dependencyGroup: "dependencies" | "devDependencies";
-  isNested: boolean;
-  isPrivate: boolean;
-};
-
-type FixturePlan = {
-  /**
-   * Which package Changesets is told to ignore, or `-1` for none. At most one, since `readConfig` rejects an ignore
-   * entry naming no package in the workspace.
-   */
-  ignoredIndex: number;
-  packagePlanList: FixturePackagePlan[];
-  privatePackagesVersion: boolean;
-  /** Which package has no `version` field at all, or `-1` for none. */
-  versionlessIndex: number;
-};
-
-const CATALOG_NAME_LIST = ["default", "react-19", "shared-dev"];
-const CATALOG_DEPENDENCY_NAME = "catalogued-dependency";
+type Fixture = { fileDirectory: string; packageList: FixturePackage[]; plan: Plan };
 
 /** How many workspaces the property runs against. */
 const WORKSPACE_COUNT = 120;
 
-// Unreviewed
-const writeJsonFile = async ({ filePath, value }: { filePath: string; value: unknown }): Promise<void> => {
-  await mkdir(path.dirname(filePath), { recursive: true });
-  await writeFile(filePath, `${JSON.stringify(value, null, 2)}\n`);
+const buildNodeArbitrary = (node: unknown): fc.Arbitrary<unknown> => {
+  if (Array.isArray(node)) {
+    const optionList: readonly unknown[] = node;
+    return fc.oneof(...optionList.map((option) => buildNodeArbitrary(option)));
+  }
+
+  if (typeof node === "object" && node !== null) {
+    return fc.record(Object.fromEntries(Object.entries(node).map(([key, child]) => [key, buildNodeArbitrary(child)])));
+  }
+
+  return fc.constant(node);
 };
 
-// Unreviewed
-const buildPackageList = ({
-  ignoredIndex,
-  packagePlanList,
-  privatePackagesVersion,
-  versionlessIndex,
-}: FixturePlan): FixturePackage[] => {
+const buildArbitrary = <Node>(node: Node): fc.Arbitrary<Drawn<Node>> =>
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- `Drawn` is the type-level twin of `buildNodeArbitrary`.
+  buildNodeArbitrary(node) as fc.Arbitrary<Drawn<Node>>;
+
+const enumerateNode = (node: unknown): unknown[] => {
+  if (Array.isArray(node)) {
+    const optionList: readonly unknown[] = node;
+    return optionList.flatMap((option) => enumerateNode(option));
+  }
+
+  if (typeof node === "object" && node !== null) {
+    let recordList: Record<string, unknown>[] = [{}];
+
+    for (const [key, child] of Object.entries(node)) {
+      const valueList = enumerateNode(child);
+      recordList = recordList.flatMap((record) => valueList.map((value) => ({ ...record, [key]: value })));
+    }
+
+    return recordList;
+  }
+
+  return [node];
+};
+
+const enumerate = <Node>(node: Node): Drawn<Node>[] =>
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- `Drawn` is the type-level twin of `enumerateNode`.
+  enumerateNode(node) as Drawn<Node>[];
+
+const planArbitrary: fc.Arbitrary<Plan> = buildArbitrary(matrix.workspace)
+  .chain((workspace) =>
+    fc
+      .array(buildArbitrary(matrix.package), { maxLength: workspace.kind === "solo" ? 1 : 5, minLength: 1 })
+      .map((packageList) => ({ packageList, workspace })),
+  )
+  .chain(({ packageList, workspace }) => {
+    const indexList = packageList.map((_packagePlan, index) => index);
+
+    return fc.record<Plan>({
+      ignoredIndex: fc.integer({ max: packageList.length - 1, min: -1 }),
+      packageList: fc.constant(packageList),
+      upgradeList: fc.array(
+        fc.record<UpgradePlan>({
+          attribute: buildArbitrary(matrix.attribute),
+          memberIndexList: fc.subarray(indexList),
+          shape: buildArbitrary(matrix.upgrade),
+          site: fc.constantFrom<Site>("root", "stray", ...indexList),
+        }),
+        { maxLength: 5, minLength: 1 },
+      ),
+      versionlessIndex: fc.integer({ max: packageList.length - 1, min: -1 }),
+      workspace: fc.constant(workspace),
+    });
+  });
+
+const resolvePackageFileDirectoryPath = ({
+  index,
+  isRoot,
+  parentFileDirectoryPath,
+  placement,
+}: {
+  index: number;
+  isRoot: boolean;
+  parentFileDirectoryPath: string;
+  placement: PackagePlan["placement"];
+}): string => {
+  if (isRoot) {
+    return "";
+  }
+
+  if (parentFileDirectoryPath === "" || placement === "beside") {
+    return `packages/package-${index}`;
+  }
+
+  return placement === "nested" ? `${parentFileDirectoryPath}/nested-${index}` : `${parentFileDirectoryPath}-${index}`;
+};
+
+const describeCrate = ({
+  crate,
+  fileDirectoryPath,
+  index,
+}: {
+  crate: PackagePlan["crate"];
+  fileDirectoryPath: string;
+  index: number;
+}): FixtureCrate | null => {
+  if (crate.site === "none") {
+    return null;
+  }
+
+  const siteFileDirectoryPath = {
+    beside: "",
+    nested: `crates/crate-${index}`,
+    node_modules: "node_modules/vendored",
+    target: "target/debug",
+  }[crate.site];
+
+  return {
+    ...crate,
+    filePath: path.posix.join(fileDirectoryPath, siteFileDirectoryPath, "Cargo.toml"),
+    isPruned: crate.site === "node_modules" || crate.site === "target",
+  };
+};
+
+const describePackageList = ({ plan }: { plan: Plan }): FixturePackage[] => {
   const packageList: FixturePackage[] = [];
 
-  for (const [index, packagePlan] of packagePlanList.entries()) {
-    const parent = packageList.at(-1);
+  for (const [index, packagePlan] of plan.packageList.entries()) {
+    const isRoot = index === 0 && plan.workspace.kind !== "mono";
 
-    // A nested package sits inside the previous one, which is what exercises deepest-match ownership. The first
-    // package has no parent to nest inside.
-    const fileDirectoryPath =
-      parent !== undefined && packagePlan.isNested
-        ? `${parent.fileDirectoryPath}/nested-${index}`
-        : `packages/package-${index}`;
+    const fileDirectoryPath = resolvePackageFileDirectoryPath({
+      index,
+      isRoot,
+      parentFileDirectoryPath: packageList.at(-1)?.fileDirectoryPath ?? "",
+      placement: packagePlan.placement,
+    });
 
-    const hasVersion = index !== versionlessIndex;
-    const isIgnored = index === ignoredIndex;
+    const hasVersion = index !== plan.versionlessIndex;
+    const isIgnored = index === plan.ignoredIndex;
 
     packageList.push({
-      catalogReferenceList:
-        packagePlan.catalogName === null
-          ? []
-          : [{ catalogName: packagePlan.catalogName, dependencyName: CATALOG_DEPENDENCY_NAME }],
+      crate: describeCrate({ crate: packagePlan.crate, fileDirectoryPath, index }),
       dependencyGroup: packagePlan.dependencyGroup,
       fileDirectoryPath,
       hasVersion,
       isIgnored,
       isPrivate: packagePlan.isPrivate,
-      // The three reasons `shouldSkipPackage` refuses a package: it is ignored, it is private and private packages
-      // aren't versioned, or it has no version at all.
-      isVersioned: !isIgnored && (privatePackagesVersion || !packagePlan.isPrivate) && hasVersion,
-      name: `@fixture/package-${index}`,
+      isVersioned: !isIgnored && (plan.workspace.privatePackagesVersion || !packagePlan.isPrivate) && hasVersion,
+      name: isRoot ? "@fixture/root" : `@fixture/package-${index}`,
     });
   }
 
   return packageList;
 };
 
-const fixturePackagePlanArbitrary = fc.record<FixturePackagePlan>({
-  catalogName: fc.option(fc.constantFrom(...CATALOG_NAME_LIST), { nil: null }),
-  dependencyGroup: fc.constantFrom("dependencies", "devDependencies"),
-  isNested: fc.boolean(),
-  isPrivate: fc.boolean(),
-});
+const resolveSiteFileDirectoryPath = ({ fixture, site }: { fixture: Fixture; site: Site }): string => {
+  if (site === "root") {
+    return "";
+  }
 
-/** A whole workspace shape. The two indexes are drawn after the list so they can't point past its end. */
-const fixturePlanArbitrary: fc.Arbitrary<FixturePlan> = fc
-  .record({
-    packagePlanList: fc.array(fixturePackagePlanArbitrary, { maxLength: 6, minLength: 2 }),
-    privatePackagesVersion: fc.boolean(),
-  })
-  .chain(({ packagePlanList, privatePackagesVersion }) =>
-    fc.record({
-      ignoredIndex: fc.integer({ max: packagePlanList.length - 1, min: -1 }),
-      packagePlanList: fc.constant(packagePlanList),
-      privatePackagesVersion: fc.constant(privatePackagesVersion),
-      versionlessIndex: fc.integer({ max: packagePlanList.length - 1, min: -1 }),
-    }),
-  );
+  if (site === "stray") {
+    return "packages/not-a-package";
+  }
 
-// Unreviewed
-const buildPackageJson = ({ fixturePackage }: { fixturePackage: FixturePackage }): Record<string, unknown> => {
-  const dependencyEntryList: [string, string][] = fixturePackage.catalogReferenceList.map(
-    ({ catalogName, dependencyName }) => [
-      dependencyName,
-      catalogName === "default" ? "catalog:" : `catalog:${catalogName}`,
-    ],
-  );
+  const fixturePackage = fixture.packageList[site];
+
+  if (fixturePackage === undefined) {
+    throw new Error(`The plan has no package ${site}.`);
+  }
+
+  return fixturePackage.fileDirectoryPath;
+};
+
+const resolveDepName = ({
+  declaration,
+  index,
+}: {
+  declaration: Exclude<Declaration, { kind: "lockfile" }>;
+  index: number;
+}): string => {
+  const packageName = `dependency-${index}`;
+
+  if (declaration.kind === "catalog") {
+    return declaration.isAliased ? `alias-${index}` : packageName;
+  }
+
+  if (declaration.kind === "override") {
+    return declaration.spelling.usesSelector ? `${packageName}@>=1.0.0 <1.0.1` : packageName;
+  }
+
+  if (declaration.kind === "workspace-dependency") {
+    return declaration.isRenamed ? `alias-${index}` : packageName;
+  }
+
+  return packageName;
+};
+
+const resolveDepType = ({
+  declaration,
+}: {
+  declaration: Exclude<Declaration, { kind: "lockfile" }>;
+}): string | null => {
+  if (declaration.kind === "catalog") {
+    return `${declaration.source.spelling}.catalog.${declaration.catalog.name}`;
+  }
+
+  if (declaration.kind === "override") {
+    return declaration.spelling.depType;
+  }
+
+  return declaration.kind === "workspace-dependency" ? "workspace.dependencies" : declaration.depType;
+};
+
+const resolvePackageFile = ({ fixture, upgrade }: { fixture: Fixture; upgrade: UpgradePlan }): string => {
+  const { declaration } = upgrade.shape;
+
+  if (declaration.kind === "catalog") {
+    return declaration.source.packageFile;
+  }
+
+  if (declaration.kind === "override") {
+    return declaration.spelling.packageFile;
+  }
+
+  if (declaration.kind === "workspace-dependency") {
+    return "Cargo.toml";
+  }
+
+  return path.posix.join(resolveSiteFileDirectoryPath({ fixture, site: upgrade.site }), declaration.manifestFileName);
+};
+
+const buildUpgrade = ({
+  fixture,
+  index,
+  upgrade,
+}: {
+  fixture: Fixture;
+  index: number;
+  upgrade: UpgradePlan;
+}): Upgrade => {
+  const { attribute, shape } = upgrade;
+  const packageFile = resolvePackageFile({ fixture, upgrade });
+
+  if (shape.declaration.kind === "lockfile") {
+    return {
+      branchName: "renovate/all",
+      displayTo: "",
+      isLockFileMaintenance: true,
+      manager: shape.manager,
+      packageFile,
+      updateType: "lockFileMaintenance",
+    };
+  }
+
+  const packageName = `dependency-${index}`;
 
   return {
-    name: fixturePackage.name,
-    ...(fixturePackage.hasVersion ? { version: "1.0.0" } : {}),
-    ...(fixturePackage.isPrivate ? { private: true } : {}),
-    [fixturePackage.dependencyGroup]: {
-      ...Object.fromEntries(dependencyEntryList),
-      "plain-dependency": "^1.0.0",
-    },
+    ...attribute.security.payload,
+    ...attribute.updateType.payload,
+    ...(attribute.hasSourceUrl ? { sourceUrl: `https://example.com/${packageName}` } : {}),
+    branchName: "renovate/all",
+    depName: resolveDepName({ declaration: shape.declaration, index }),
+    depType: resolveDepType({ declaration: shape.declaration }),
+    manager: shape.manager,
+    packageFile,
+    packageName,
   };
 };
 
-// Unreviewed
-/**
- * Writes a throwaway pnpm workspace to a temporary directory and describes what it contains.
- *
- * The shapes it varies — package count, nesting, catalog declarations, dependency group, private flags,
- * `privatePackages.version`, ignore lists, and packages with no version — are the ones a single repository can't cover
- * on its own, and they are exactly what a shared package's consumers will have.
- */
-const createFixtureWorkspace = async ({ plan }: { plan: FixturePlan }): Promise<FixtureWorkspace> => {
-  const fileDirectory = await mkdtemp(path.join(tmpdir(), "renovate-changesets-"));
-  const packageList = buildPackageList(plan);
-
-  await Promise.all(
-    packageList.map(async (fixturePackage) => {
-      await writeJsonFile({
-        filePath: path.join(fileDirectory, fixturePackage.fileDirectoryPath, "package.json"),
-        value: buildPackageJson({ fixturePackage }),
-      });
-    }),
-  );
-
-  await writeFile(
-    path.join(fileDirectory, "pnpm-workspace.yaml"),
-    [
-      "catalog:",
-      '  catalogued-dependency: "^1.0.0"',
-      "catalogs:",
-      ...CATALOG_NAME_LIST.filter((catalogName) => catalogName !== "default").flatMap((catalogName) => [
-        `  ${catalogName}:`,
-        '    catalogued-dependency: "^1.0.0"',
-      ]),
-      "packages:",
-      ...packageList.map((fixturePackage) => `  - ${fixturePackage.fileDirectoryPath}`),
-      "",
-    ].join("\n"),
-  );
-
-  await writeJsonFile({
-    filePath: path.join(fileDirectory, "package.json"),
-    value: {
-      name: "@fixture/root",
-      private: true,
-      version: "0.0.0",
-    },
-  });
-
-  await writeJsonFile({
-    filePath: path.join(fileDirectory, ".changeset", "config.json"),
-    value: {
-      $schema: "https://unpkg.com/@changesets/config@4.0.0/schema.json",
-      access: "restricted",
-      baseBranch: "main",
-      changelog: false,
-      commit: false,
-      fixed: [],
-      ignore: packageList
-        .filter((fixturePackage) => fixturePackage.isIgnored)
-        .map((fixturePackage) => fixturePackage.name),
-      linked: [],
-      privatePackages: { tag: false, version: plan.privatePackagesVersion },
-      updateInternalDependencies: "patch",
-    },
-  });
-
-  return {
-    catalogNameList: CATALOG_NAME_LIST,
-    fileDirectory,
-    packageList,
-    versionedPackageNameList: packageList
-      .filter((fixturePackage) => fixturePackage.isVersioned)
-      .map((fixturePackage) => fixturePackage.name),
-  };
-};
-
-const CHANGESET_PATTERN = /^---\n"(?<packageName>[^"]+)": patch\n---\n\n(?<body>.+)\n$/su;
-const BODY_PATTERN =
-  /^Updated `(?<dependencyName>[^`]+)` (?:from `(?<fromVersion>[^`]+)` )?to `(?<toVersion>[^`]+)`\.$/u;
-const FILE_NAME_PATTERN = /^renovate-(?<hash>[\da-f]{8})\.md$/u;
-
-type Pair = { dependencyName: string; packageName: string };
-
-// Unreviewed
-/**
- * Works out who should own a manifest from the fixture's own description, by directory prefix rather than by the path
- * arithmetic the implementation uses. Packages Changesets won't version are excluded first, which is what makes a
- * manifest inside an ignored nested package fall through to its parent.
- */
 const findExpectedOwner = ({
   fixture,
   manifestFilePath,
 }: {
-  fixture: FixtureWorkspace;
+  fixture: Fixture;
   manifestFilePath: string;
 }): string | null =>
   fixture.packageList
     .filter(
       (fixturePackage) =>
         fixturePackage.isVersioned &&
-        (manifestFilePath === fixturePackage.fileDirectoryPath ||
+        (fixturePackage.fileDirectoryPath === "" ||
           manifestFilePath.startsWith(`${fixturePackage.fileDirectoryPath}/`)),
     )
     .toSorted((left, right) => right.fileDirectoryPath.length - left.fileDirectoryPath.length)
     .at(0)?.name ?? null;
 
-// Unreviewed
-const buildUpgradeList = ({ fixture }: { fixture: FixtureWorkspace }): Upgrade[] => [
-  // One update per package, each with its own dependency name and version so ownership is never ambiguous.
-  ...fixture.packageList.map((fixturePackage, index) => ({
-    currentVersion: `${index + 1}.0.0`,
-    depName: `dependency-${index}`,
-    depType: fixturePackage.dependencyGroup,
-    displayFrom: `${index + 1}.0.0`,
-    displayTo: `${index + 1}.1.0`,
-    newVersion: `${index + 1}.1.0`,
-    packageFile: `${fixturePackage.fileDirectoryPath}/package.json`,
-    packageName: `dependency-${index}`,
-    updateType: "minor" as const,
-  })),
-  // A manifest at the repository root, owned by no package.
-  {
-    currentVersion: "0.2.337",
-    depName: "chainctl",
-    displayFrom: "0.2.337",
-    displayTo: "0.2.338",
-    newVersion: "0.2.338",
-    packageFile: "mise.toml",
-    packageName: "chainctl",
-  },
-  // A manifest in a directory that isn't a package at all.
-  {
-    currentVersion: "1.0.0",
-    depName: "stray-dependency",
-    displayFrom: "1.0.0",
-    displayTo: "1.1.0",
-    newVersion: "1.1.0",
-    packageFile: "packages/not-a-package/package.json",
-    packageName: "stray-dependency",
-  },
-  // One update per catalog, each with its own version.
-  ...fixture.catalogNameList.map((catalogName, index) => ({
-    currentVersion: `10.${index}.0`,
-    depName: CATALOG_DEPENDENCY_NAME,
-    depType: `pnpm.catalog.${catalogName}`,
-    displayFrom: `10.${index}.0`,
-    displayTo: `10.${index}.1`,
-    newVersion: `10.${index}.1`,
-    packageFile: "pnpm-workspace.yaml",
-    packageName: CATALOG_DEPENDENCY_NAME,
-    updateType: "patch" as const,
-  })),
-];
+const resolveExpectedPackageNameList = ({ fixture, upgrade }: { fixture: Fixture; upgrade: UpgradePlan }): string[] => {
+  const { declaration } = upgrade.shape;
 
-// Unreviewed
-const buildExpectedPairList = ({ fixture }: { fixture: FixtureWorkspace }): Pair[] => {
-  const pairList: Pair[] = [];
+  const memberNameList = fixture.packageList
+    .filter((fixturePackage, index) => fixturePackage.isVersioned && upgrade.memberIndexList.includes(index))
+    .map((fixturePackage) => fixturePackage.name);
 
-  for (const [index, fixturePackage] of fixture.packageList.entries()) {
-    const packageName = findExpectedOwner({
-      fixture,
-      manifestFilePath: `${fixturePackage.fileDirectoryPath}/package.json`,
-    });
-
-    if (packageName !== null) {
-      pairList.push({ dependencyName: `dependency-${index}`, packageName });
-    }
+  if (declaration.kind === "catalog") {
+    return memberNameList;
   }
 
-  for (const catalogName of fixture.catalogNameList) {
-    for (const fixturePackage of fixture.packageList) {
-      const consumes = fixturePackage.catalogReferenceList.some(
-        (reference) => reference.catalogName === catalogName && reference.dependencyName === CATALOG_DEPENDENCY_NAME,
-      );
-
-      if (fixturePackage.isVersioned && consumes) {
-        pairList.push({ dependencyName: CATALOG_DEPENDENCY_NAME, packageName: fixturePackage.name });
-      }
-    }
+  if (declaration.kind === "override") {
+    const owner = findExpectedOwner({ fixture, manifestFilePath: declaration.spelling.packageFile });
+    return owner === null ? memberNameList : [owner];
   }
 
-  return pairList;
+  if (declaration.kind === "workspace-dependency") {
+    return [
+      ...fixture.packageList.flatMap((fixturePackage, index) =>
+        fixturePackage.crate !== null && !fixturePackage.crate.isPruned && upgrade.memberIndexList.includes(index)
+          ? [fixturePackage.crate.filePath]
+          : [],
+      ),
+      ...(fixture.plan.workspace.hasStrayCrate ? ["packages/not-a-package/Cargo.toml"] : []),
+    ]
+      .map((crateFilePath) => findExpectedOwner({ fixture, manifestFilePath: crateFilePath }))
+      .filter((owner) => owner !== null);
+  }
+
+  const owner = findExpectedOwner({ fixture, manifestFilePath: resolvePackageFile({ fixture, upgrade }) });
+  return owner === null ? [] : [owner];
 };
 
-// Unreviewed
-const sortPairList = ({ pairList }: { pairList: Pair[] }): string[] =>
-  pairList.map(({ dependencyName, packageName }) => `${packageName} <- ${dependencyName}`).toSorted();
+const customTemplate =
+  '---\n"{{changesetPackageName}}": patch\n---\n\n{{#if isLockFileMaintenance}}{{manager}} lockfile{{else}}{{depName}} {{displayTo}}{{/if}} on {{branchName}}\n';
 
-// Unreviewed
-/** One named group of a match, or the empty string when either the match or the group is missing. */
-const readMatchGroup = ({ groupName, match }: { groupName: string; match: RegExpExecArray | null }): string =>
-  match?.groups?.[groupName] ?? "";
+const buildExpectedBody = ({
+  fixture,
+  index,
+  upgrade,
+}: {
+  fixture: Fixture;
+  index: number;
+  upgrade: UpgradePlan;
+}): string => {
+  const { attribute, shape } = upgrade;
+  const { declaration } = shape;
 
-// Unreviewed
-/** Every package that draws the catalogued dependency from a named catalog, as the pair it should produce. */
-const buildCatalogConsumerPairList = ({ fixture }: { fixture: FixtureWorkspace }): string[] => [
-  ...new Set(
-    fixture.packageList
-      .filter(
-        (fixturePackage) =>
-          fixturePackage.isVersioned &&
-          fixturePackage.catalogReferenceList.some((reference) => reference.catalogName !== ""),
-      )
-      .map((fixturePackage) => `${fixturePackage.name} <- ${CATALOG_DEPENDENCY_NAME}`),
-  ),
-];
+  if (fixture.plan.workspace.template === "custom") {
+    return declaration.kind === "lockfile"
+      ? `${shape.manager} lockfile on renovate/all`
+      : `${resolveDepName({ declaration, index })} ${attribute.updateType.payload.displayTo} on renovate/all`;
+  }
 
-// Unreviewed
-/** Every pair a package that draws from no catalog must never produce. */
-const buildCatalogNonConsumerPairSet = ({ fixture }: { fixture: FixtureWorkspace }): Set<string> =>
-  new Set(
-    fixture.packageList
-      .filter((fixturePackage) => fixturePackage.catalogReferenceList.length === 0)
-      .map((fixturePackage) => `${fixturePackage.name} <- ${CATALOG_DEPENDENCY_NAME}`),
-  );
+  if (declaration.kind === "lockfile") {
+    return declaration.sentence.replaceAll("<manager>", shape.manager);
+  }
 
-// Unreviewed
-/** Every pair a nested package must produce for its own manifest, rather than the package containing it. */
-const buildNestedPairList = ({ fixture }: { fixture: FixtureWorkspace }): string[] =>
-  [...fixture.packageList.entries()]
-    .filter(([, fixturePackage]) => fixturePackage.isVersioned && fixturePackage.fileDirectoryPath.includes("/nested-"))
-    .map(([index, fixturePackage]) => `${fixturePackage.name} <- dependency-${index}`);
+  const packageName = `dependency-${index}`;
+  const subject = attribute.hasSourceUrl
+    ? `[${packageName}](https://example.com/${packageName})`
+    : `\`${packageName}\``;
 
-// Unreviewed
-/** Every property a generated workspace's changesets must satisfy, asserted against one materialized fixture. */
-const assertWorkspaceChangesets = async ({ fixture }: { fixture: FixtureWorkspace }): Promise<void> => {
-  const upgradeList = buildUpgradeList({ fixture });
-  const options = {
-    cwd: fixture.fileDirectory,
-    templateFilePath: undefined,
-    upgradeListString: encodeJson(upgradeList),
+  return `${attribute.updateType.sentence.replaceAll("<subject>", subject).replaceAll("<name>", packageName)}${attribute.security.tag}`;
+};
+
+const buildExpectedContentList = ({ fixture }: { fixture: Fixture }): string[] =>
+  [
+    ...new Set(
+      fixture.plan.upgradeList.flatMap((upgrade, index) =>
+        resolveExpectedPackageNameList({ fixture, upgrade }).map(
+          (packageName) => `---\n"${packageName}": patch\n---\n\n${buildExpectedBody({ fixture, index, upgrade })}\n`,
+        ),
+      ),
+    ),
+  ].toSorted();
+
+const buildOverrideEntryList = ({ depType, fixture }: { depType: string; fixture: Fixture }): [string, string][] =>
+  fixture.plan.upgradeList.flatMap((upgrade, index): [string, string][] => {
+    const { declaration } = upgrade.shape;
+
+    return declaration.kind === "override" && declaration.spelling.depType === depType
+      ? [[resolveDepName({ declaration, index }), "1.0.1"]]
+      : [];
+  });
+
+const buildRootFieldMap = ({ fixture }: { fixture: Fixture }): Record<string, unknown> => {
+  const overrideEntryList = buildOverrideEntryList({ depType: "overrides", fixture });
+  const pnpmOverrideEntryList = buildOverrideEntryList({ depType: "pnpm.overrides", fixture });
+  const resolutionEntryList = buildOverrideEntryList({ depType: "resolutions", fixture });
+  const { kind, tool } = fixture.plan.workspace;
+
+  return {
+    ...(overrideEntryList.length > 0 ? { overrides: Object.fromEntries(overrideEntryList) } : {}),
+    ...(pnpmOverrideEntryList.length > 0 ? { pnpm: { overrides: Object.fromEntries(pnpmOverrideEntryList) } } : {}),
+    ...(resolutionEntryList.length > 0 ? { resolutions: Object.fromEntries(resolutionEntryList) } : {}),
+    ...(tool === "pnpm" || kind === "solo"
+      ? {}
+      : {
+          workspaces: fixture.packageList.map((fixturePackage) =>
+            fixturePackage.fileDirectoryPath === "" ? "." : fixturePackage.fileDirectoryPath,
+          ),
+        }),
   };
-  await run(options);
+};
 
-  const firstChangesetList = await readChangesets({ fileDirectory: fixture.fileDirectory });
+const buildPackageJson = ({
+  fixture,
+  fixturePackage,
+  packageIndex,
+}: {
+  fixture: Fixture;
+  fixturePackage: FixturePackage;
+  packageIndex: number;
+}): Record<string, unknown> => {
+  const dependencyGroupMap: Record<string, Record<string, string>> = {};
 
-  await run(options);
+  for (const [index, upgrade] of fixture.plan.upgradeList.entries()) {
+    const { declaration } = upgrade.shape;
 
-  const changesetList = await readChangesets({ fileDirectory: fixture.fileDirectory });
-  const actualPairList: Pair[] = [];
+    if (
+      (declaration.kind !== "catalog" && declaration.kind !== "override") ||
+      !upgrade.memberIndexList.includes(packageIndex)
+    ) {
+      continue;
+    }
 
-  for (const { content, fileName } of changesetList) {
-    // 1. Every file is named the way this tool names files.
-    const fileNameMatch = FILE_NAME_PATTERN.exec(fileName);
+    const [key, value] =
+      declaration.kind === "catalog"
+        ? [resolveDepName({ declaration, index }), declaration.catalog.reference]
+        : [`dependency-${index}`, "^1.0.0"];
 
-    expect(fileNameMatch, `file name ${fileName}`).not.toBeNull();
+    dependencyGroupMap[fixturePackage.dependencyGroup] = {
+      ...dependencyGroupMap[fixturePackage.dependencyGroup],
+      [key]: value,
+    };
+  }
 
-    // 2. A file's name is the hash of its own content, which is what makes a rebase overwrite rather than pile up.
-    expect(fileNameMatch?.groups?.hash).toBe(createHash("sha256").update(content).digest("hex").slice(0, 8));
+  return {
+    name: fixturePackage.name,
+    ...(fixturePackage.hasVersion ? { version: "1.0.0" } : {}),
+    ...(fixturePackage.isPrivate ? { private: true } : {}),
+    ...dependencyGroupMap,
+    ...(fixturePackage.fileDirectoryPath === "" ? buildRootFieldMap({ fixture }) : {}),
+  };
+};
 
-    // 3. Every file parses as changeset frontmatter followed by a body.
-    const changesetMatch = CHANGESET_PATTERN.exec(content);
+const buildCatalogLineList = ({ fixture, spelling }: { fixture: Fixture; spelling: "pnpm" | "yarn" }): string[] => {
+  const entryList = fixture.plan.upgradeList.flatMap((upgrade, index) => {
+    const { declaration } = upgrade.shape;
 
-    expect(changesetMatch, `content ${JSON.stringify(content)}`).not.toBeNull();
+    if (declaration.kind !== "catalog" || declaration.source.spelling !== spelling) {
+      return [];
+    }
 
-    const packageName = readMatchGroup({ groupName: "packageName", match: changesetMatch });
-    const bodyMatch = BODY_PATTERN.exec(readMatchGroup({ groupName: "body", match: changesetMatch }));
+    const value = declaration.isAliased ? `npm:dependency-${index}@^1.0.0` : "^1.0.0";
 
-    // 4. Every body names one dependency and the version it moved to.
-    expect(
-      bodyMatch,
-      `body ${JSON.stringify(readMatchGroup({ groupName: "body", match: changesetMatch }))}`,
-    ).not.toBeNull();
+    return [{ catalogName: declaration.catalog.name, line: `${resolveDepName({ declaration, index })}: "${value}"` }];
+  });
 
-    // 5. Every package named is a real package in the workspace.
-    expect(fixture.packageList.map((fixturePackage) => fixturePackage.name)).toContain(packageName);
+  const defaultLineList = entryList
+    .filter((entry) => entry.catalogName === "default")
+    .map((entry) => `  ${entry.line}`);
+  const namedLineList = entryList
+    .filter((entry) => entry.catalogName === "react-19")
+    .map((entry) => `    ${entry.line}`);
 
-    // 6. Every package named is one Changesets would actually version.
-    expect(fixture.versionedPackageNameList).toContain(packageName);
+  return [
+    ...(defaultLineList.length > 0 ? ["catalog:", ...defaultLineList] : []),
+    ...(namedLineList.length > 0 ? ["catalogs:", "  react-19:", ...namedLineList] : []),
+  ];
+};
 
-    actualPairList.push({
-      dependencyName: readMatchGroup({ groupName: "dependencyName", match: bodyMatch }),
-      packageName,
+const buildCrateManifest = ({
+  crate,
+  crateName,
+  fixture,
+  packageIndex,
+}: {
+  crate: Pick<FixtureCrate, "syntax" | "table">;
+  crateName: string;
+  fixture: Fixture;
+  packageIndex: number | null;
+}): string => {
+  const entryList = fixture.plan.upgradeList.flatMap((upgrade, index) => {
+    const { declaration } = upgrade.shape;
+
+    return declaration.kind === "workspace-dependency"
+      ? [
+          {
+            inherits: packageIndex === null || upgrade.memberIndexList.includes(packageIndex),
+            key: resolveDepName({ declaration, index }),
+          },
+        ]
+      : [];
+  });
+
+  const lineList = entryList.flatMap(({ inherits, key }) => {
+    if (!inherits) {
+      return [`${key} = "1.0.0"`];
+    }
+
+    if (crate.syntax === "dotted") {
+      return [`${key}.workspace = true`];
+    }
+
+    return crate.syntax === "inline" ? [`${key} = { workspace = true }`] : [];
+  });
+
+  const subTableLineList =
+    crate.syntax === "table"
+      ? entryList
+          .filter((entry) => entry.inherits)
+          .flatMap(({ key }) => ["", `[${crate.table}.${key}]`, "workspace = true"])
+      : [];
+
+  return [
+    "[package]",
+    `name = "${crateName}"`,
+    'version = "0.1.0"',
+    "",
+    `[${crate.table}]`,
+    ...lineList,
+    ...subTableLineList,
+    "",
+  ].join("\n");
+};
+
+const buildRootCargoManifest = ({ fixture }: { fixture: Fixture }): string | null => {
+  const { packageList, plan } = fixture;
+
+  const rootCrate =
+    packageList.map((fixturePackage) => fixturePackage.crate).find((crate) => crate?.filePath === "Cargo.toml") ?? null;
+
+  const workspaceDependencyLineList = plan.upgradeList.flatMap((upgrade, index) => {
+    const { declaration } = upgrade.shape;
+
+    if (declaration.kind !== "workspace-dependency") {
+      return [];
+    }
+
+    return declaration.isRenamed
+      ? [`alias-${index} = { package = "dependency-${index}", version = "1.0.0" }`]
+      : [`dependency-${index} = "1.0.0"`];
+  });
+
+  const memberList = [
+    ...packageList.flatMap((fixturePackage) =>
+      fixturePackage.crate === null || fixturePackage.crate.isPruned || fixturePackage.crate.filePath === "Cargo.toml"
+        ? []
+        : [path.posix.dirname(fixturePackage.crate.filePath)],
+    ),
+    ...(plan.workspace.hasStrayCrate ? ["packages/not-a-package"] : []),
+  ];
+
+  if (rootCrate === null && memberList.length === 0 && workspaceDependencyLineList.length === 0) {
+    return null;
+  }
+
+  return [
+    ...(rootCrate === null
+      ? []
+      : [buildCrateManifest({ crate: rootCrate, crateName: "crate-0", fixture, packageIndex: 0 })]),
+    "[workspace]",
+    `members = ${JSON.stringify(memberList)}`,
+    ...(workspaceDependencyLineList.length > 0 ? ["", "[workspace.dependencies]", ...workspaceDependencyLineList] : []),
+    "",
+  ].join("\n");
+};
+
+const buildFileMap = ({ fixture }: { fixture: Fixture }): Record<string, string> => {
+  const { packageList, plan } = fixture;
+  const { hasStrayCrate, kind, privatePackagesVersion, template, tool } = plan.workspace;
+  const isWorkspace = kind !== "solo";
+
+  const fileMap: Record<string, string> = {
+    ".changeset/config.json": buildChangesetConfig({
+      ignore: packageList
+        .filter((fixturePackage) => fixturePackage.isIgnored)
+        .map((fixturePackage) => fixturePackage.name),
+      privatePackages: { tag: false, version: privatePackagesVersion },
+    }),
+  };
+
+  if (template === "custom") {
+    fileMap[".github/changeset.md"] = customTemplate;
+  }
+
+  for (const [packageIndex, fixturePackage] of packageList.entries()) {
+    fileMap[path.posix.join(fixturePackage.fileDirectoryPath, "package.json")] = serializePackageJson({
+      value: buildPackageJson({ fixture, fixturePackage, packageIndex }),
+    });
+
+    if (fixturePackage.crate !== null && fixturePackage.crate.filePath !== "Cargo.toml") {
+      fileMap[fixturePackage.crate.filePath] = buildCrateManifest({
+        crate: fixturePackage.crate,
+        crateName: `crate-${packageIndex}`,
+        fixture,
+        packageIndex,
+      });
+    }
+  }
+
+  if (kind === "mono") {
+    fileMap["package.json"] = serializePackageJson({
+      value: { name: "@fixture/root", private: true, version: "0.0.0", ...buildRootFieldMap({ fixture }) },
     });
   }
 
-  // 7. The whole set of package-to-dependency pairs is exactly the expected one — nothing missing, nothing extra.
-  expect(sortPairList({ pairList: actualPairList })).toStrictEqual(
-    sortPairList({ pairList: buildExpectedPairList({ fixture }) }),
-  );
+  if (isWorkspace && tool === "bun") {
+    fileMap["bun.lock"] = "\n";
+  }
 
-  // 8. A manifest owned by no package contributes nothing.
-  expect(actualPairList.map((pair) => pair.dependencyName)).not.toContain("chainctl");
-  expect(actualPairList.map((pair) => pair.dependencyName)).not.toContain("stray-dependency");
+  if (isWorkspace && tool === "npm") {
+    fileMap["package-lock.json"] = "{}\n";
+  }
 
-  const actualPairNameList = sortPairList({ pairList: actualPairList });
+  if (isWorkspace && tool === "yarn") {
+    fileMap["yarn.lock"] = "\n";
+  }
 
-  // 9. A catalog reaches every package that draws from it.
-  expect(actualPairNameList).toStrictEqual(expect.arrayContaining(buildCatalogConsumerPairList({ fixture })));
+  const workspaceOverrideEntryList = buildOverrideEntryList({ depType: "pnpm-workspace.overrides", fixture });
 
-  // 10. A catalog reaches no package that doesn't draw from it.
-  const catalogNonConsumerPairSet = buildCatalogNonConsumerPairSet({ fixture });
+  const pnpmWorkspaceLineList = [
+    ...(isWorkspace && tool === "pnpm"
+      ? [
+          "packages:",
+          ...packageList.map(
+            (fixturePackage) =>
+              `  - ${fixturePackage.fileDirectoryPath === "" ? "." : fixturePackage.fileDirectoryPath}`,
+          ),
+        ]
+      : []),
+    ...buildCatalogLineList({ fixture, spelling: "pnpm" }),
+    ...(workspaceOverrideEntryList.length > 0
+      ? ["overrides:", ...workspaceOverrideEntryList.map(([key, value]) => `  "${key}": "${value}"`)]
+      : []),
+  ];
 
-  expect(actualPairNameList.filter((pair) => catalogNonConsumerPairSet.has(pair))).toStrictEqual([]);
+  if (pnpmWorkspaceLineList.length > 0) {
+    fileMap["pnpm-workspace.yaml"] = `${pnpmWorkspaceLineList.join("\n")}\n`;
+  }
 
-  // 11. A manifest inside a nested package belongs to the nested package, not to the one containing it.
-  expect(actualPairNameList).toStrictEqual(expect.arrayContaining(buildNestedPairList({ fixture })));
+  const yarnrcLineList = buildCatalogLineList({ fixture, spelling: "yarn" });
 
-  // 12. Re-running against the same branch rewrites the same files rather than adding a second set.
-  expect(changesetList).toStrictEqual(firstChangesetList);
+  if (yarnrcLineList.length > 0) {
+    fileMap[".yarnrc.yml"] = `${yarnrcLineList.join("\n")}\n`;
+  }
+
+  const rootCargoManifest = buildRootCargoManifest({ fixture });
+
+  if (rootCargoManifest !== null) {
+    fileMap["Cargo.toml"] = rootCargoManifest;
+  }
+
+  if (hasStrayCrate) {
+    fileMap["packages/not-a-package/Cargo.toml"] = buildCrateManifest({
+      crate: { syntax: "dotted", table: "dependencies" },
+      crateName: "crate-stray",
+      fixture,
+      packageIndex: null,
+    });
+  }
+
+  return fileMap;
 };
 
-describe("Generated workspaces", () => {
-  propertyTest.prop([fixturePlanArbitrary], { numRuns: WORKSPACE_COUNT })(
+const assertPlan = async ({ plan }: { plan: Plan }): Promise<void> => {
+  const fileDirectory = await mkdtemp(path.join(tmpdir(), "renovate-changesets-"));
+  const fixture: Fixture = { fileDirectory, packageList: describePackageList({ plan }), plan };
+
+  try {
+    await writeFileMap({ fileDirectory, fileMap: buildFileMap({ fixture }) });
+
+    const options = {
+      cwd: fileDirectory,
+      templateFilePath: plan.workspace.template === "custom" ? ".github/changeset.md" : undefined,
+      upgradeListString: encodeJson(
+        plan.upgradeList.map((upgrade, index) => buildUpgrade({ fixture, index, upgrade })),
+      ),
+    };
+
+    await run(options);
+
+    const firstChangesetList = await readChangesets({ fileDirectory });
+
+    await run(options);
+
+    const changesetList = await readChangesets({ fileDirectory });
+
+    for (const { content, fileName } of changesetList) {
+      expect(fileName).toBe(`renovate-${createHash("sha256").update(content).digest("hex").slice(0, 8)}.md`);
+    }
+
+    expect(changesetList.map((changeset) => changeset.content).toSorted()).toStrictEqual(
+      buildExpectedContentList({ fixture }),
+    );
+    expect(changesetList).toStrictEqual(firstChangesetList);
+  } finally {
+    await removeWorkspace({ fileDirectory });
+  }
+};
+
+const findLeaf = <Leaf>({ leafList, matches }: { leafList: Leaf[]; matches: (leaf: Leaf) => boolean }): Leaf => {
+  const leaf = leafList.find((candidate) => matches(candidate));
+
+  if (leaf === undefined) {
+    throw new Error("The matrix has no such leaf.");
+  }
+
+  return leaf;
+};
+
+const attributeLeafList = enumerate(matrix.attribute);
+const crateLeafList = enumerate(matrix.package.crate);
+const shapeLeafList = enumerate(matrix.upgrade);
+
+const canonicalAttribute = findLeaf({
+  leafList: attributeLeafList,
+  matches: (attribute) =>
+    !attribute.hasSourceUrl &&
+    attribute.security.security === "none" &&
+    attribute.updateType.payload.updateType === "minor",
+});
+
+const canonicalCrate = findLeaf({
+  leafList: crateLeafList,
+  matches: (crate) => crate.site === "beside" && crate.syntax === "dotted" && crate.table === "dependencies",
+});
+
+const canonicalWorkspaceDependencyShape = findLeaf({
+  leafList: shapeLeafList,
+  matches: (shape) => shape.declaration.kind === "workspace-dependency" && !shape.declaration.isRenamed,
+});
+
+const canonicalShape = findLeaf({
+  leafList: shapeLeafList,
+  matches: (shape) =>
+    shape.manager === "npm" && shape.declaration.kind === "none" && shape.declaration.depType === "dependencies",
+});
+
+const buildLeafPlan = ({
+  attribute,
+  crate,
+  kind,
+  shape,
+}: {
+  attribute: Attribute;
+  crate: PackagePlan["crate"];
+  kind: WorkspaceKind;
+  shape: Shape;
+}): Plan => {
+  const memberIndex = kind === "solo" ? 0 : 1;
+
+  return {
+    ignoredIndex: -1,
+    packageList: [
+      { crate, dependencyGroup: "dependencies", isPrivate: false, placement: "beside" },
+      ...(kind === "solo"
+        ? []
+        : [{ crate, dependencyGroup: "dependencies" as const, isPrivate: false, placement: "nested" as const }]),
+    ],
+    upgradeList: [{ attribute, memberIndexList: [memberIndex], shape, site: memberIndex }],
+    versionlessIndex: -1,
+    workspace: { hasStrayCrate: false, kind, privatePackagesVersion: true, template: "default", tool: "pnpm" },
+  };
+};
+
+const shapeCaseList = matrix.workspace.kind.flatMap((kind) =>
+  shapeLeafList.map((shape) => ({ kind, shape, title: `Resolves ${JSON.stringify(shape)} in a ${kind} workspace` })),
+);
+
+const attributeCaseList = attributeLeafList.map((attribute) => ({
+  attribute,
+  title: `Renders ${JSON.stringify(attribute)}`,
+}));
+
+const crateCaseList = matrix.workspace.kind.flatMap((kind) =>
+  crateLeafList.map((crate) => ({ crate, kind, title: `Walks to ${JSON.stringify(crate)} in a ${kind} workspace` })),
+);
+
+describe("Matrix", () => {
+  it.each(shapeCaseList)("$title", async ({ kind, shape }) => {
+    expect.hasAssertions();
+
+    await assertPlan({ plan: buildLeafPlan({ attribute: canonicalAttribute, crate: canonicalCrate, kind, shape }) });
+  });
+
+  it.each(attributeCaseList)("$title", async ({ attribute }) => {
+    expect.hasAssertions();
+
+    await assertPlan({
+      plan: buildLeafPlan({ attribute, crate: canonicalCrate, kind: "mono", shape: canonicalShape }),
+    });
+  });
+
+  it.each(crateCaseList)("$title", async ({ crate, kind }) => {
+    expect.hasAssertions();
+
+    await assertPlan({
+      plan: buildLeafPlan({ attribute: canonicalAttribute, crate, kind, shape: canonicalWorkspaceDependencyShape }),
+    });
+  });
+
+  propertyTest.prop([planArbitrary], { numRuns: WORKSPACE_COUNT })(
     "Writes exactly the changesets a workspace implies",
     async (plan) => {
-      const fixture = await createFixtureWorkspace({ plan });
-
-      try {
-        await assertWorkspaceChangesets({ fixture });
-      } finally {
-        await removeWorkspace({ fileDirectory: fixture.fileDirectory });
-      }
+      await assertPlan({ plan });
     },
     30_000,
   );
