@@ -5,17 +5,19 @@ import path from "node:path";
 import { readConfig as readChangesetConfig } from "@changesets/config";
 import { shouldSkipPackage } from "@changesets/should-skip-package";
 import { configure, getLogger } from "@logtape/logtape";
-import { getPackages, type Package } from "@manypkg/get-packages";
+import { getPackages } from "@manypkg/get-packages";
 import Handlebars from "handlebars";
 import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
 import { z } from "zod";
 
 import packageJson from "../package.json" with { type: "json" };
-import { resolveCargoPackagesBySharedUpgrade } from "./managers/cargo.js";
+import { readCargoManifests, resolveCargoPackagesBySharedUpgrade, type WorkspacePackage } from "./managers/cargo.js";
 import { resolveNpmPackagesBySharedUpgrade } from "./managers/npm.js";
 import { upgradeSchema, type Upgrade } from "./schema.js";
+import { resolvePackageByFilePath } from "./workspace.js";
 
+export type { WorkspacePackage } from "./managers/cargo.js";
 export type { UpdateType, Upgrade } from "./schema.js";
 
 const logger = getLogger(["renovate-changesets"]);
@@ -61,7 +63,7 @@ Updated {{> packageLink}}{{#if displayFrom}} from \`{{displayFrom}}\`{{/if}} to 
 /** A {@link Upgrade} paired with a workspace package. */
 export type PackageUpgrade = Upgrade & { changesetPackageName: string };
 
-export const findWorkspacePackages = async ({ cwd }: { cwd: string }): Promise<Package[]> => {
+export const findWorkspacePackages = async ({ cwd }: { cwd: string }): Promise<WorkspacePackage[]> => {
   const workspace = await getPackages(cwd);
   const readChangesetConfigResult = await readChangesetConfig(cwd, workspace);
 
@@ -71,49 +73,29 @@ export const findWorkspacePackages = async ({ cwd }: { cwd: string }): Promise<P
 
   const { config: changesetConfig } = readChangesetConfigResult;
 
-  return workspace.packages.filter(
-    (_package) =>
-      !shouldSkipPackage(_package, {
-        allowPrivatePackages: changesetConfig.privatePackages.version,
-        ignore: changesetConfig.ignore,
-      }),
-  );
+  return readCargoManifests({
+    cwd,
+    packageList: workspace.packages.filter(
+      (_package) =>
+        !shouldSkipPackage(_package, {
+          allowPrivatePackages: changesetConfig.privatePackages.version,
+          ignore: changesetConfig.ignore,
+        }),
+    ),
+  });
 };
 
-export const resolvePackageByUpgrade = ({
-  cwd,
-  packageList,
-  upgrade,
-}: {
-  cwd: string;
-  packageList: Package[];
-  upgrade: Upgrade;
-}): string | null => {
-  const resolvedManifestFilePath = path.resolve(cwd, upgrade.packageFile);
-
-  return (
-    packageList
-      .filter((_package) => {
-        const relativeFilePath = path.relative(path.resolve(_package.dir), resolvedManifestFilePath);
-        return !relativeFilePath.startsWith("..");
-      })
-      .toSorted((left, right) => right.dir.length - left.dir.length)
-      .at(0)?.packageJson.name ?? null
-  );
-};
-
-export const resolvePackagesBySharedUpgrade = async ({
+export const resolvePackagesBySharedUpgrade = ({
   hasOwningPackage,
   packageList,
   upgrade,
 }: {
   hasOwningPackage: boolean;
-  packageList: Package[];
+  packageList: WorkspacePackage[];
   upgrade: Upgrade;
-}): Promise<string[] | null> => {
-  const npmPackageNameList = resolveNpmPackagesBySharedUpgrade({ hasOwningPackage, packageList, upgrade });
-  return npmPackageNameList ?? resolveCargoPackagesBySharedUpgrade({ packageList, upgrade });
-};
+}): string[] | null =>
+  resolveNpmPackagesBySharedUpgrade({ hasOwningPackage, packageList, upgrade }) ??
+  resolveCargoPackagesBySharedUpgrade({ packageList, upgrade });
 
 export const mapUpgradesToPackages = async ({
   cwd,
@@ -124,27 +106,24 @@ export const mapUpgradesToPackages = async ({
 }): Promise<PackageUpgrade[]> => {
   const packageList = await findWorkspacePackages({ cwd });
 
-  const resolvedUpgradeList = await Promise.all(
-    upgradeList.map(async (upgrade) => {
-      const owningPackageName = resolvePackageByUpgrade({ cwd, packageList, upgrade });
+  return upgradeList.flatMap((upgrade) => {
+    const owningPackageName =
+      resolvePackageByFilePath({ cwd, filePath: upgrade.packageFile, packageList })?.packageJson.name ?? null;
 
-      const sharedPackageNameList = await resolvePackagesBySharedUpgrade({
-        hasOwningPackage: owningPackageName !== null,
-        packageList,
-        upgrade,
-      });
+    const sharedPackageNameList = resolvePackagesBySharedUpgrade({
+      hasOwningPackage: owningPackageName !== null,
+      packageList,
+      upgrade,
+    });
 
-      let packageNameList = sharedPackageNameList;
+    let packageNameList = sharedPackageNameList;
 
-      if (packageNameList === null && owningPackageName !== null) {
-        packageNameList = [owningPackageName];
-      }
+    if (packageNameList === null && owningPackageName !== null) {
+      packageNameList = [owningPackageName];
+    }
 
-      return [...new Set(packageNameList)].map((changesetPackageName) => ({ ...upgrade, changesetPackageName }));
-    }),
-  );
-
-  return resolvedUpgradeList.flat();
+    return [...new Set(packageNameList)].map((changesetPackageName) => ({ ...upgrade, changesetPackageName }));
+  });
 };
 
 export const writeChangesets = async ({

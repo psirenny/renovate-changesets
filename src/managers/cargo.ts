@@ -1,10 +1,11 @@
-import { readdir, readFile } from "node:fs/promises";
+import { glob, readFile } from "node:fs/promises";
 import path from "node:path";
 
 import type { Package } from "@manypkg/get-packages";
 import { parse as parseToml } from "smol-toml";
 
 import type { Upgrade } from "../schema.js";
+import { resolvePackageByFilePath } from "../workspace.js";
 
 const cargoDependencySectionList = ["build-dependencies", "dependencies", "dev-dependencies"] as const;
 
@@ -12,94 +13,76 @@ const cargoDependencySectionList = ["build-dependencies", "dependencies", "dev-d
 type CargoDependency = string | { workspace?: boolean };
 type CargoDependencyTable = Record<string, CargoDependency>;
 type CargoPlatform = Partial<Record<(typeof cargoDependencySectionList)[number], CargoDependencyTable>>;
-type CargoManifest = CargoPlatform & { target?: Record<string, CargoPlatform> };
+export type CargoManifest = CargoPlatform & { target?: Record<string, CargoPlatform> };
 
-const findCargoManifestFilePathList = async ({
-  fileDirectory,
-  packageFileDirectories,
+export type WorkspacePackage = Package & { cargoManifestList: CargoManifest[] };
+
+export const readCargoManifests = async ({
+  cwd,
+  packageList,
 }: {
-  fileDirectory: string;
-  packageFileDirectories: Set<string>;
-}): Promise<string[]> => {
-  const entryList = await readdir(fileDirectory, { withFileTypes: true });
-
-  const nestedFilePathList = await Promise.all(
-    entryList.map(async (entry) => {
-      const filePath = path.join(fileDirectory, entry.name);
-
-      if (!entry.isDirectory()) {
-        return entry.name === "Cargo.toml" ? [filePath] : [];
-      }
-
-      return ["node_modules", "target"].includes(entry.name) || packageFileDirectories.has(path.resolve(filePath))
-        ? []
-        : findCargoManifestFilePathList({ fileDirectory: filePath, packageFileDirectories });
-    }),
+  cwd: string;
+  packageList: Package[];
+}): Promise<WorkspacePackage[]> => {
+  const manifestFilePathList = await Array.fromAsync(
+    glob("**/Cargo.toml", { cwd, exclude: ["**/node_modules/**", "**/target/**"] }),
   );
 
-  return nestedFilePathList.flat();
+  return Promise.all(
+    packageList.map(async (_package) => ({
+      ..._package,
+      cargoManifestList: await Promise.all(
+        manifestFilePathList
+          .filter(
+            (manifestFilePath) =>
+              resolvePackageByFilePath({ cwd, filePath: manifestFilePath, packageList }) === _package,
+          )
+          .map(async (manifestFilePath): Promise<CargoManifest> => {
+            const manifestContent = await readFile(path.resolve(cwd, manifestFilePath), "utf8");
+
+            try {
+              return parseToml(manifestContent);
+            } catch (error) {
+              throw new Error(`Couldn't parse ${manifestFilePath}.`, { cause: error });
+            }
+          }),
+      ),
+    })),
+  );
 };
 
-export const resolveCargoPackagesByWorkspaceDependency = async ({
+export const resolveCargoPackagesByWorkspaceDependency = ({
   packageList,
   upgrade,
 }: {
-  packageList: Package[];
+  packageList: WorkspacePackage[];
   upgrade: Upgrade;
-}): Promise<string[] | null> => {
+}): string[] | null => {
   const depName = upgrade.depName ?? null;
 
   if (depName === null || upgrade.depType !== "workspace.dependencies") {
     return null;
   }
 
-  const packageFileDirectories = new Set(packageList.map((_package) => path.resolve(_package.dir)));
-
-  const packageNameList = await Promise.all(
-    packageList.map(async (_package) => {
-      const manifestFilePathList = await findCargoManifestFilePathList({
-        fileDirectory: _package.dir,
-        packageFileDirectories: new Set(
-          [...packageFileDirectories].filter((_fileDirectory) => _fileDirectory !== path.resolve(_package.dir)),
+  return packageList
+    .filter((_package) =>
+      _package.cargoManifestList.some((manifest) =>
+        [manifest, ...Object.values(manifest.target ?? {})].some((platform) =>
+          cargoDependencySectionList.some((sectionName) => {
+            const entry = platform[sectionName]?.[depName];
+            return typeof entry === "object" && entry.workspace === true;
+          }),
         ),
-      });
-
-      const inheritsWorkspaceDependencyList = await Promise.all(
-        manifestFilePathList.map(async (manifestFilePath) => {
-          const manifestContent = await readFile(manifestFilePath, "utf8");
-
-          try {
-            const manifest: CargoManifest = parseToml(manifestContent);
-
-            const dependencyTableList = [
-              ...cargoDependencySectionList.map((sectionName) => manifest[sectionName]),
-              ...Object.values(manifest.target ?? {}).flatMap((platformSection) =>
-                cargoDependencySectionList.map((sectionName) => platformSection[sectionName]),
-              ),
-            ];
-
-            return dependencyTableList.some((table) => {
-              const entry = table?.[depName];
-              return typeof entry === "object" && entry.workspace === true;
-            });
-          } catch (error) {
-            throw new Error(`Couldn't parse ${manifestFilePath}.`, { cause: error });
-          }
-        }),
-      );
-
-      return inheritsWorkspaceDependencyList.some(Boolean) ? _package.packageJson.name : null;
-    }),
-  );
-
-  return packageNameList.filter((_packageName) => _packageName !== null);
+      ),
+    )
+    .map((_package) => _package.packageJson.name);
 };
 
-export const resolveCargoPackagesBySharedUpgrade = async ({
+export const resolveCargoPackagesBySharedUpgrade = ({
   packageList,
   upgrade,
 }: {
-  packageList: Package[];
+  packageList: WorkspacePackage[];
   upgrade: Upgrade;
-}): Promise<string[] | null> =>
+}): string[] | null =>
   upgrade.manager === "cargo" ? resolveCargoPackagesByWorkspaceDependency({ packageList, upgrade }) : null;

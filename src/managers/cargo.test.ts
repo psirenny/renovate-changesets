@@ -5,7 +5,7 @@ import path from "node:path";
 import type { Package } from "@manypkg/get-packages";
 import { describe, expect, it, onTestFinished } from "vitest";
 
-import { resolveCargoPackagesByWorkspaceDependency } from "./cargo.js";
+import { readCargoManifests, resolveCargoPackagesByWorkspaceDependency } from "./cargo.js";
 
 // Unreviewed
 /** Writes a minimal single-package or multi-package workspace with exactly the shape a test asks for. */
@@ -35,6 +35,21 @@ const buildCargoWorkspacePackage = ({ fileDirectory, name }: { fileDirectory: st
   relativeDir: `packages/${name}`,
 });
 
+describe(readCargoManifests, () => {
+  it("Reports which Cargo manifest failed to parse", async () => {
+    expect.hasAssertions();
+
+    const fileDirectory = await createWorkspace({
+      fileMap: { "packages/broken/Cargo.toml": "[dependencies\nserde = " },
+    });
+    const packageList = [buildCargoWorkspacePackage({ fileDirectory, name: "broken" })];
+
+    await expect(readCargoManifests({ cwd: fileDirectory, packageList })).rejects.toThrow(
+      /Couldn't parse .*Cargo\.toml/u,
+    );
+  });
+});
+
 describe(resolveCargoPackagesByWorkspaceDependency, () => {
   it("Ignores a target table whose entry isn't a table at all", async () => {
     expect.hasAssertions();
@@ -47,29 +62,16 @@ describe(resolveCargoPackagesByWorkspaceDependency, () => {
         "packages/scalar/Cargo.toml": '[package]\nname = "scalar"\n\n[target]\nnot-a-table = "x"\n',
       },
     });
-    const cargoPackageList = ["scalar", "heir"].map((name) => buildCargoWorkspacePackage({ fileDirectory, name }));
-
-    await expect(
-      resolveCargoPackagesByWorkspaceDependency({
-        packageList: cargoPackageList,
-        upgrade: { depName: "serde", depType: "workspace.dependencies", manager: "cargo", packageFile: "Cargo.toml" },
-      }),
-    ).resolves.toStrictEqual(["heir"]);
-  });
-
-  it("Reports which Cargo manifest failed to parse", async () => {
-    expect.hasAssertions();
-
-    const fileDirectory = await createWorkspace({
-      fileMap: { "packages/broken/Cargo.toml": "[dependencies\nserde = " },
+    const packageList = await readCargoManifests({
+      cwd: fileDirectory,
+      packageList: ["scalar", "heir"].map((name) => buildCargoWorkspacePackage({ fileDirectory, name })),
     });
-    const packageList = [buildCargoWorkspacePackage({ fileDirectory, name: "broken" })];
 
-    await expect(
+    expect(
       resolveCargoPackagesByWorkspaceDependency({
         packageList,
         upgrade: { depName: "serde", depType: "workspace.dependencies", manager: "cargo", packageFile: "Cargo.toml" },
       }),
-    ).rejects.toThrow(/Couldn't parse .*Cargo\.toml/u);
+    ).toStrictEqual(["heir"]);
   });
 });
