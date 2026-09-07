@@ -13,6 +13,12 @@
   "labels": ["Maintenance"],
   "packageRules": [
     {
+      "description": "Update Changesets togther.",
+      "groupName": "changesets",
+      "groupSlug": "changesets",
+      "matchPackageNames": ["@changesets/**", "changesets/action"]
+    },
+    {
       "description": "Update every major dependency individually.",
       "automerge": false,
       "matchUpdateTypes": ["major"]

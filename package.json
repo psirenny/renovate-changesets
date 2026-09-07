@@ -1,7 +1,7 @@
 {
   "name": "renovate-changesets",
   "version": "0.0.0",
-  "description": "Write one Changesets file per package and dependency from Renovate's own upgrade payload",
+  "description": "Changesets for all of your Renovate updates.",
   "keywords": [
     "catalog",
     "changeset",

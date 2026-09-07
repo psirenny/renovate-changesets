@@ -14,7 +14,9 @@ jobs:
       github.event.pull_request.head.ref == 'changeset-release/main'
     name: "Changesets: Publish"
     runs-on: ubuntu-24.04
-    permissions: write-all
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - name: Checkout Git repository from the Release pull request head
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -31,19 +33,13 @@ jobs:
         with:
           cache: pnpm
           node-version-file: .node-version
-          registry-url: https://registry.npmjs.org
       - name: Install Node.js dependencies
         run: pnpm install
-      - name: Changesets — Publish to npm and tag the release
+      - name: Changesets — Publish to npm, tag the release, and create the GitHub release
         uses: changesets/action@8488615a623b1b9c987934bb89eae8af6a946ac1 # v2.1.1
         env:
-          # Attests that the tarball was built by this workflow. Requires a public repository;
-          # drop it while the repository is private or `npm publish` will refuse to run.
           NPM_CONFIG_PROVENANCE: "true"
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         with:
-          # The release workflow triggers on the pushed Git tag, not on a GitHub release.
-          create-github-releases: false
           # A tag pushed with the default `GITHUB_TOKEN` doesn't trigger other workflows.
           github-token: ${{ secrets.GH_PAT }}
           publish-script: pnpm run publish-packages

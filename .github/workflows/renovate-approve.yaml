@@ -1,0 +1,26 @@
+name: Renovate approve
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - synchronize
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+permissions: {}
+jobs:
+  renovate:
+    if: >-
+      github.event.pull_request.user.login == 'psirenny' && github.event.pull_request.head.repo.full_name ==
+      github.repository && github.event.pull_request.head.ref == 'renovate/non-major'
+    name: "Renovate: Approve"
+    runs-on: ubuntu-24.04
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Approve the Renovate pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: gh pr review "$PR_URL" --approve
