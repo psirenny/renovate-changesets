@@ -21,6 +21,12 @@
       "matchPackageNames": ["@changesets/**", "changesets/action"]
     },
     {
+      "description": "Group Vitest and its coverage provider together. The provider checks the installed Vitest major and fails the test run against a different one, so upgrading either side alone breaks CI. Precedes the update-type rules so non-major updates still batch into the non-major group.",
+      "groupName": "vitest",
+      "groupSlug": "vitest",
+      "matchPackageNames": ["@vitest/**", "vitest"]
+    },
+    {
       "description": "Update every major dependency individually.",
       "automerge": false,
       "matchUpdateTypes": ["major"]
