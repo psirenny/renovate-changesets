@@ -53,7 +53,8 @@ jobs:
           LOG_FILE_LEVEL: warn
           LOG_LEVEL: ${{ inputs.log-level }}
           RENOVATE_ALLOWED_COMMANDS:
-            '["^pnpm install --frozen-lockfile --ignore-scripts$", "^pnpm run build$", "^node dist/cli\\.js "]'
+            '["^pnpm install --frozen-lockfile --ignore-scripts$", "^pnpm run build$", "^node dist/cli\\.js ", "^pnpm
+            run oxfmt:fix$"]'
           RENOVATE_BINARY_SOURCE: global
           # Otherwise, PNPM fails when Renovate bumps PNPM itself.
           RENOVATE_CUSTOM_ENV_VARIABLES: '{"pnpm_config_pm_on_fail": "warn"}'

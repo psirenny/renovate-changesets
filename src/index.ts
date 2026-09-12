@@ -2,10 +2,11 @@ import { createHash } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-import { readConfig as readChangesetConfig } from "@changesets/config";
+import { readConfig } from "@changesets/config";
+import { defaultDetectOrder, detect, format as formatFiles } from "@changesets/format";
 import { shouldSkipPackage } from "@changesets/should-skip-package";
 import { configure, getLogger } from "@logtape/logtape";
-import { getPackages } from "@manypkg/get-packages";
+import { getPackages, type Packages } from "@manypkg/get-packages";
 import Handlebars from "handlebars";
 import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
@@ -63,17 +64,34 @@ Updated {{> packageLink}}{{#if displayFrom}} from \`{{displayFrom}}\`{{/if}} to 
 /** A {@link Upgrade} paired with a workspace package. */
 export type PackageUpgrade = Upgrade & { changesetPackageName: string };
 
-export const findWorkspacePackages = async ({ cwd }: { cwd: string }): Promise<WorkspacePackage[]> => {
-  const workspace = await getPackages(cwd);
-  const readChangesetConfigResult = await readChangesetConfig(cwd, workspace);
+type ChangesetConfig = NonNullable<Awaited<ReturnType<typeof readConfig>>["config"]>;
 
-  if (readChangesetConfigResult.errors !== undefined) {
-    throw new Error(`.changeset/config.json is invalid: ${readChangesetConfigResult.errors.join(", ")}`);
+export const readChangesetConfig = async ({
+  cwd,
+  workspace,
+}: {
+  cwd: string;
+  workspace: Packages;
+}): Promise<ChangesetConfig> => {
+  const result = await readConfig(cwd, workspace);
+
+  if (result.errors !== undefined) {
+    throw new Error(`.changeset/config.json is invalid: ${result.errors.join(", ")}`);
   }
 
-  const { config: changesetConfig } = readChangesetConfigResult;
+  return result.config;
+};
 
-  return readCargoManifests({
+export const findWorkspacePackages = async ({
+  changesetConfig,
+  cwd,
+  workspace,
+}: {
+  changesetConfig: ChangesetConfig;
+  cwd: string;
+  workspace: Packages;
+}): Promise<WorkspacePackage[]> =>
+  readCargoManifests({
     cwd,
     packageList: workspace.packages.filter(
       (_package) =>
@@ -83,7 +101,6 @@ export const findWorkspacePackages = async ({ cwd }: { cwd: string }): Promise<W
         }),
     ),
   });
-};
 
 export const resolvePackagesBySharedUpgrade = ({
   hasOwningPackage,
@@ -97,16 +114,16 @@ export const resolvePackagesBySharedUpgrade = ({
   resolveNpmPackagesBySharedUpgrade({ hasOwningPackage, packageList, upgrade }) ??
   resolveCargoPackagesBySharedUpgrade({ packageList, upgrade });
 
-export const mapUpgradesToPackages = async ({
+export const mapUpgradesToPackages = ({
   cwd,
+  packageList,
   upgradeList,
 }: {
   cwd: string;
+  packageList: WorkspacePackage[];
   upgradeList: Upgrade[];
-}): Promise<PackageUpgrade[]> => {
-  const packageList = await findWorkspacePackages({ cwd });
-
-  return upgradeList.flatMap((upgrade) => {
+}): PackageUpgrade[] =>
+  upgradeList.flatMap((upgrade) => {
     const owningPackageName =
       resolvePackageByFilePath({ cwd, filePath: upgrade.packageFile, packageList })?.packageJson.name ?? null;
 
@@ -124,25 +141,35 @@ export const mapUpgradesToPackages = async ({
 
     return [...new Set(packageNameList)].map((changesetPackageName) => ({ ...upgrade, changesetPackageName }));
   });
-};
 
 export const writeChangesets = async ({
   cwd,
+  format,
   resolvedUpgradeList,
   template,
 }: {
   cwd: string;
+  format: ChangesetConfig["format"];
   resolvedUpgradeList: PackageUpgrade[];
   template: string;
 }): Promise<void> => {
-  await Promise.all(
+  const filePathList = await Promise.all(
     resolvedUpgradeList.map(async (resolvedUpgrade) => {
       let content = Handlebars.compile(template, { noEscape: true, strict: true })(resolvedUpgrade);
       content = `${content.replaceAll(/\n{3,}/gu, "\n\n").trim()}\n`;
       const contentHash = createHash("sha256").update(content).digest("hex").slice(0, 8);
-      await writeFile(path.join(cwd, ".changeset", `renovate-${contentHash}.md`), content);
+      const filePath = path.join(cwd, ".changeset", `renovate-${contentHash}.md`);
+      await writeFile(filePath, content);
+      return filePath;
     }),
   );
+
+  const formatter =
+    format === "auto" ? await detect({ cwd, order: defaultDetectOrder.filter((name) => name !== "biome") }) : format;
+
+  if (formatter !== false && formatter !== undefined && filePathList.length > 0) {
+    await formatFiles([...new Set(filePathList)], { cwd, formatter });
+  }
 };
 
 export const run = async ({
@@ -161,9 +188,16 @@ export const run = async ({
   const template =
     templateFilePath === undefined ? defaultTemplate : await readFile(path.resolve(cwd, templateFilePath), "utf8");
 
-  const resolvedUpgradeList = await mapUpgradesToPackages({ cwd, upgradeList });
+  const workspace = await getPackages(cwd);
+  const changesetConfig = await readChangesetConfig({ cwd, workspace });
+  const packageList = await findWorkspacePackages({ changesetConfig, cwd, workspace });
 
-  await writeChangesets({ cwd, resolvedUpgradeList, template });
+  await writeChangesets({
+    cwd,
+    format: changesetConfig.format,
+    resolvedUpgradeList: mapUpgradesToPackages({ cwd, packageList, upgradeList }),
+    template,
+  });
 };
 
 export const main = async (argumentList: string[] = hideBin(process.argv)): Promise<number> => {

@@ -11,6 +11,9 @@ importers:
       '@changesets/config':
         specifier: ^4.0.0
         version: 4.0.0
+      '@changesets/format':
+        specifier: ^0.1.2
+        version: 0.1.2
       '@changesets/should-skip-package':
         specifier: ^1.0.0
         version: 1.0.0

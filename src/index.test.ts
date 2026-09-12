@@ -6,12 +6,13 @@ import path from "node:path";
 import { fc, test as propertyTest } from "@fast-check/vitest";
 import { configure, getLogger, reset } from "@logtape/logtape";
 import { createLogRecorder } from "@logtape/testing/recorder";
+import { getPackages } from "@manypkg/get-packages";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 
 import {
   configureLogger,
-  findWorkspacePackages,
   main,
+  readChangesetConfig,
   run,
   writeChangesets,
   type PackageUpgrade,
@@ -40,8 +41,15 @@ const writeFileMap = async ({
   );
 };
 
-const createWorkspace = async ({ fileMap }: { fileMap: Record<string, string> }): Promise<string> => {
-  const fileDirectory = await mkdtemp(path.join(tmpdir(), "renovate-changesets-"));
+const createWorkspace = async ({
+  fileMap,
+  parentDirectory = tmpdir(),
+}: {
+  fileMap: Record<string, string>;
+  parentDirectory?: string;
+}): Promise<string> => {
+  await mkdir(parentDirectory, { recursive: true });
+  const fileDirectory = await mkdtemp(path.join(parentDirectory, "renovate-changesets-"));
 
   onTestFinished(async () => {
     await removeWorkspace({ fileDirectory });
@@ -79,12 +87,12 @@ const createChangeset = async ({
   template: string;
 }): Promise<string> => {
   const fileDirectory = await createWorkspace({ fileMap: { ".changeset/.keep": "" } });
-  await writeChangesets({ cwd: fileDirectory, resolvedUpgradeList: [resolvedUpgrade], template });
+  await writeChangesets({ cwd: fileDirectory, format: false, resolvedUpgradeList: [resolvedUpgrade], template });
   const [changeset] = await readChangesets({ fileDirectory });
   return changeset?.content ?? "";
 };
 
-describe(findWorkspacePackages, () => {
+describe(readChangesetConfig, () => {
   it("Fails when the repository has no Changesets config, which this tool exists to write for", async () => {
     expect.hasAssertions();
 
@@ -96,7 +104,9 @@ describe(findWorkspacePackages, () => {
       },
     });
 
-    await expect(findWorkspacePackages({ cwd })).rejects.toThrow(/ENOENT.*config\.json/u);
+    await expect(readChangesetConfig({ cwd, workspace: await getPackages(cwd) })).rejects.toThrow(
+      /ENOENT.*config\.json/u,
+    );
   });
 });
 
@@ -132,6 +142,8 @@ const createFixtureChangeset = async ({
   overrides?: Partial<PackageUpgrade>;
   template: string;
 }): Promise<string> => createChangeset({ resolvedUpgrade: buildResolvedUpgrade(overrides), template });
+const formatterFixtureDirectory = path.join(import.meta.dirname, "..", "node_modules", ".cache", "renovate-changesets");
+
 describe(writeChangesets, () => {
   it("Interpolates a variable", async () => {
     expect.hasAssertions();
@@ -331,6 +343,85 @@ describe(writeChangesets, () => {
     expect.hasAssertions();
 
     await expect(createFixtureChangeset({ template: "x{{else}}y" })).rejects.toThrow(/Parse error on line 1/u);
+  });
+
+  it("Formats what it wrote with the configured formatter", async () => {
+    expect.hasAssertions();
+
+    const cwd = await createWorkspace({
+      fileMap: { ".changeset/.keep": "", ".oxfmtrc.json": '{ "printWidth": 40, "proseWrap": "always" }\n' },
+      parentDirectory: formatterFixtureDirectory,
+    });
+
+    await writeChangesets({
+      cwd,
+      format: "oxfmt",
+      resolvedUpgradeList: [buildResolvedUpgrade()],
+      template: "Updated {{depName}} from `{{displayFrom}}` to `{{displayTo}}` in the fixture package.",
+    });
+
+    const [changeset] = await readChangesets({ fileDirectory: cwd });
+
+    expect(changeset?.content).toBe("Updated ky from `^2.0.2` to `^3.0.0` in\nthe fixture package.\n");
+  });
+
+  it("Detects the project's formatter when the config leaves format on auto", async () => {
+    expect.hasAssertions();
+
+    const cwd = await createWorkspace({
+      fileMap: { ".changeset/.keep": "", ".oxfmtrc.json": '{ "printWidth": 40, "proseWrap": "always" }\n' },
+      parentDirectory: formatterFixtureDirectory,
+    });
+
+    await writeChangesets({
+      cwd,
+      format: "auto",
+      resolvedUpgradeList: [buildResolvedUpgrade()],
+      template: "Updated {{depName}} from `{{displayFrom}}` to `{{displayTo}}` in the fixture package.",
+    });
+
+    const [changeset] = await readChangesets({ fileDirectory: cwd });
+
+    expect(changeset?.content).toBe("Updated ky from `^2.0.2` to `^3.0.0` in\nthe fixture package.\n");
+  });
+
+  it("Leaves what it wrote alone when formatting is off", async () => {
+    expect.hasAssertions();
+
+    const cwd = await createWorkspace({
+      fileMap: { ".changeset/.keep": "", ".oxfmtrc.json": '{ "printWidth": 40, "proseWrap": "always" }\n' },
+      parentDirectory: formatterFixtureDirectory,
+    });
+
+    await writeChangesets({
+      cwd,
+      format: false,
+      resolvedUpgradeList: [buildResolvedUpgrade()],
+      template: "Updated {{depName}} from `{{displayFrom}}` to `{{displayTo}}` in the fixture package.",
+    });
+
+    const [changeset] = await readChangesets({ fileDirectory: cwd });
+
+    expect(changeset?.content).toBe("Updated ky from `^2.0.2` to `^3.0.0` in the fixture package.\n");
+  });
+
+  it("Runs no formatter when it wrote nothing, so the rest of the repository is left as it was", async () => {
+    expect.hasAssertions();
+
+    const cwd = await createWorkspace({
+      fileMap: {
+        ".changeset/.keep": "",
+        ".oxfmtrc.json": '{ "printWidth": 40, "proseWrap": "always" }\n',
+        "NOTES.md": "A line that is long enough for the formatter to wrap it.\n",
+      },
+      parentDirectory: formatterFixtureDirectory,
+    });
+
+    await writeChangesets({ cwd, format: "oxfmt", resolvedUpgradeList: [], template: "{{depName}}" });
+
+    await expect(readFile(path.join(cwd, "NOTES.md"), "utf8")).resolves.toBe(
+      "A line that is long enough for the formatter to wrap it.\n",
+    );
   });
 });
 

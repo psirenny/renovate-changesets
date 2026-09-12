@@ -42,6 +42,9 @@ Configure Renovate:
 }
 ```
 
+Each changeset is written to `.changeset/` and formatted with the formatter that `format` in `.changeset/config.json`
+selects, as `changeset add` does.
+
 <!-- markdownlint-disable MD036 -->
 
 **.github/workflows/renovate.yaml**
