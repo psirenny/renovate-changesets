@@ -4,7 +4,7 @@
     "description-format": [
       "error",
       {
-        "forbidEndingPeriod": true
+        "requireEndingPeriod": true
       }
     ],
     "no-duplicate-properties": "error",

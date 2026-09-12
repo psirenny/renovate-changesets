@@ -9,6 +9,8 @@
     ":configMigration",
     "abandonments:recommended"
   ],
+  "gitAuthor": "psirenny-bot[bot] <328334403+psirenny-bot[bot]@users.noreply.github.com>",
+  "gitIgnoredAuthors": ["328334403+psirenny-bot[bot]@users.noreply.github.com"],
   "ignorePresets": ["group:monorepos", "group:recommended"],
   "labels": ["Maintenance"],
   "packageRules": [

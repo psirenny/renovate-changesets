@@ -26,13 +26,19 @@ jobs:
           node-version-file: .node-version
       - name: Install Node.js dependencies
         run: pnpm install
+      - id: release-bot-token
+        name: Mint psirenny Bot installation token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.RELEASE_BOT_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_BOT_APP_PRIVATE_KEY }}
       - name: Changesets — Open or update a Release pull request
         uses: changesets/action@8488615a623b1b9c987934bb89eae8af6a946ac1 # v2.1.1
         with:
           commit-message: Release 🚀
-          # A personal access token rather than the default `GITHUB_TOKEN`: a push made with the
-          # default token doesn't trigger other workflows, so the Release pull request would
-          # never run CI.
-          github-token: ${{ secrets.GH_PAT }}
+          # The action ignores a `GITHUB_TOKEN` environment variable, so the psirenny Bot token has
+          # to be passed explicitly. A push made with the default `GITHUB_TOKEN` doesn't trigger
+          # other workflows, so the Release pull request would never run CI.
+          github-token: ${{ steps.release-bot-token.outputs.token }}
           pr-title: Release 🚀
           version-script: pnpm run version
