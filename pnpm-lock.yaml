@@ -85,8 +85,8 @@ importers:
         specifier: 7.0.2001
         version: 7.0.2001
       renovate:
-        specifier: 44.71.0
-        version: 44.71.0(supports-color@7.2.0)(typanion@3.14.0)
+        specifier: 44.71.1
+        version: 44.71.1(supports-color@7.2.0)(typanion@3.14.0)
       tsdown:
         specifier: 0.23.0
         version: 0.23.0(typescript@7.0.2)
@@ -3458,8 +3458,8 @@ packages:
   remark@15.0.1:
     resolution: {integrity: sha512-Eht5w30ruCXgFmxVUSlNWQ9iiimq07URKeFS3hNc8cUWy1llX4KDWfyEDZRycMc+znsN9Ux5/tJ/BFdgdOwA3A==}
 
-  renovate@44.71.0:
-    resolution: {integrity: sha512-6CWL8nIJCQTvfomdb7lfWr9aQT9/7lLyoU4BLZYfNQN1eAZVjdOsYLitmVsqDbmXE/brkhJ06ohl/fWMnF5TCQ==}
+  renovate@44.71.1:
+    resolution: {integrity: sha512-Ppm32CH7qBk2zVKwU58MXrCNNN1M6IQGRj9qAchSlF1QTqZw7y9nI6yPlO4EpgdFANgM9jm7egYZlbTOydcPug==}
     engines: {node: ^24.11.0, pnpm: ^11.0.0}
     hasBin: true
 
@@ -7706,7 +7706,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  renovate@44.71.0(supports-color@7.2.0)(typanion@3.14.0):
+  renovate@44.71.1(supports-color@7.2.0)(typanion@3.14.0):
     dependencies:
       '@aws-sdk/client-codecommit': 3.1117.0
       '@aws-sdk/client-ec2': 3.1117.0
