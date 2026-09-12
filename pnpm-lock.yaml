@@ -63,6 +63,9 @@ importers:
       github-actionlint:
         specifier: 1.7.12
         version: 1.7.12
+      markdownlint:
+        specifier: 0.41.1
+        version: 0.41.1(supports-color@7.2.0)
       markdownlint-cli2:
         specifier: 0.23.2
         version: 0.23.2(supports-color@7.2.0)

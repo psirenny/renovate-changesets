@@ -1,4 +1,4 @@
 {
-  "MD013": false,
+  "extends": "./node_modules/markdownlint/style/prettier.json",
   "MD024": { "siblings_only": true },
 }
