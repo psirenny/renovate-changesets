@@ -1,3 +1,4 @@
+.git/
 .vscode/
 pnpm-lock.yaml
 renovate.json
