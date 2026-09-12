@@ -101,8 +101,6 @@ jobs:
             '["^pnpm install --frozen-lockfile --ignore-scripts$", "^pnpm renovate-changesets"]'
           RENOVATE_ALLOW_SHELL_EXECUTOR_FOR_POST_UPGRADE_COMMANDS: "true"
           RENOVATE_BINARY_SOURCE: global
-          # Otherwise, PNPM fails when Renovate bumps PNPM itself.
-          RENOVATE_CUSTOM_ENV_VARIABLES: '{"pnpm_config_pm_on_fail": "warn"}'
           RENOVATE_DRY_RUN: ${{ inputs.is-dry-run == true && 'full' || '' }}
           RENOVATE_GITHUB_COM_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RENOVATE_REPOSITORIES: ${{ github.repository }}
