@@ -1,3 +1,4 @@
 {
+  "extends": "../.markdownlint.jsonc",
   "MD041": false,
 }

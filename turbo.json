@@ -22,7 +22,15 @@
       ]
     },
     "markdownlint:check": {
-      "inputs": ["!.turbo/**", "!dist/**", "!node_modules/**", "**/*.md", ".gitignore", ".markdownlint-cli2.jsonc"]
+      "inputs": [
+        "!.turbo/**",
+        "!dist/**",
+        "!node_modules/**",
+        "**/*.md",
+        "**/.markdownlint.jsonc",
+        ".gitignore",
+        ".markdownlint-cli2.jsonc"
+      ]
     },
     "markdownlint:fix": {
       "cache": false
