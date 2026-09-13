@@ -9,7 +9,62 @@
 
 [![CI](https://github.com/psirenny/renovate-changesets/actions/workflows/ci.yaml/badge.svg)](https://github.com/psirenny/renovate-changesets/actions/workflows/ci.yaml)
 
-A Renovate plugin to generate [changesets](https://github.com/changesets/changesets) from dependency updates.
+A Renovate `postUpgradeTask` to generate [changesets](https://github.com/changesets/changesets) from dependency updates.
+This is intentionally _not_ a GitHub Action because inferring dependencies from a Renovate pull request is rife with
+errors.
+
+## Examples
+
+**packages/api/CHANGELOG.md**
+
+```markdown
+# api
+
+## 1.2.4
+
+### Patch Changes
+
+- Pinned [hono](https://github.com/honojs/hono) to `4.13.7`.
+- Updated [zod](https://github.com/colinhacks/zod) from `4.5.4` to `4.6.1`.
+- Updated the `cargo` lockfile.
+- Replaced `eslint` with `oxlint` `1.82.0`.
+- Updated `node` from `24.8.0-alpine` to `24.9.0-alpine`.
+```
+
+**packages/application/CHANGELOG.md**
+
+```markdown
+# application
+
+## 1.2.4
+
+### Patch Changes
+
+- Updated `postgres` from `18.1` to `18.2`.
+- Replaced `eslint` with `oxlint` `1.82.0`.
+- Updated [zod](https://github.com/colinhacks/zod) from `4.5.4` to `4.6.1`.
+- Updated [next](https://github.com/vercel/next.js) from `15.2.2` to `15.2.3`. [Security: CRITICAL]
+- Rolled back [vitest](https://github.com/vitest-dev/vitest) to `4.1.10`.
+```
+
+## Support
+
+| Ecosystem          | Supported |
+| ------------------ | --------- |
+| Bun                | 🚧        |
+| Cargo              | ✅        |
+| Custom managers    | ✅        |
+| Deno               | ✅        |
+| Docker             | ✅        |
+| Docker Compose     | ✅        |
+| GitHub Actions     | ✅        |
+| Go                 | 🚧        |
+| mise / asdf        | ✅        |
+| Node version files | 🚧        |
+| NPM                | ✅        |
+| PNPM               | ✅        |
+| uv                 | 🚧        |
+| Yarn               | ✅        |
 
 ## Installation
 
@@ -23,11 +78,7 @@ pnpm add --save-dev --save-exact renovate renovate-changesets
 
 Configure Renovate:
 
-<!-- markdownlint-disable MD036 -->
-
 **renovate.json**
-
-<!-- markdownlint-enable MD036 -->
 
 ```json
 {
@@ -43,13 +94,10 @@ Configure Renovate:
 ```
 
 Each changeset is written to `.changeset/` and formatted with the formatter that `format` in `.changeset/config.json`
-selects, as `changeset add` does.
-
-<!-- markdownlint-disable MD036 -->
+selects, as `changeset add` does. Packages that `.changeset/config.json` leaves out get no changeset: anything matched
+by `ignore`, and private packages unless `privatePackages.version` is enabled.
 
 **.github/workflows/renovate.yaml**
-
-<!-- markdownlint-enable MD036 -->
 
 ```yaml
 name: Renovate
@@ -115,3 +163,44 @@ jobs:
             exit 1
           fi
 ```
+
+## Recommended configurations
+
+**pnpm-workspace.yaml**
+
+```yaml
+# yaml-language-server: $schema=https://www.schemastore.org/pnpm-workspace.json
+# …
+minimumReleaseAge: 4320
+minimumReleaseAgeStrict: false
+pmOnFail: download
+```
+
+`minimumReleaseAge` is the PNPM side of Renovate's `security:minimumReleaseAgeNpm` preset, which holds back an update
+until its release is three days old. Keep the two configuration values in sync: 4320 minutes is those three days.
+
+`minimumReleaseAgeStrict` has to be disabled, because PNPM enables it as soon as you set `minimumReleaseAge`. But strict
+mode conflicts with the `pnpm update --no-save` command Renovate uses when a new version satisfies the range in
+`package.json`.
+
+`pmOnFail` decides what PNPM does when it can't switch to the version of PNPM specified in the `package.json`
+`packageManager` field. When PNPM itself is updated, there's a discrepancy between the version of PNPM Renovate runs
+during an update and the version of PNPM that it's upgrading to. `download` fetches the declared version instead of
+failing the post-upgrade commands or carrying on with the old version and writing the lockfile with it.
+
+**renovate.json**
+
+```jsonc
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  // …
+  "gitIgnoredAuthors": ["12345678+your-bot[bot]@users.noreply.github.com"],
+  "platformCommit": "enabled",
+}
+```
+
+`platformCommit` allows Renovate to sign commits by using the Git platform API instead of using Git directly.
+
+`gitIgnoredAuthors` has to include the app or bot account that platform commits are attributed to. Renovate tries to
+stay out of the way when it notices people committing to a branch, and it only recognizes `gitAuthor` and
+`noreply@github.com` by default. We need to tell Renovate that the app/bot accounts aren't real people.
