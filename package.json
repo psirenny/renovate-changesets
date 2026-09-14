@@ -82,7 +82,7 @@
     "oxfmt": "0.67.0",
     "oxlint": "1.82.0",
     "oxlint-tsgolint": "7.0.2001",
-    "renovate": "44.74.1",
+    "renovate": "44.79.6",
     "tsdown": "0.23.0",
     "turbo": "2.10.12",
     "typescript": "7.0.2",
@@ -95,5 +95,5 @@
   "engines": {
     "node": "^24 || >=26"
   },
-  "packageManager": "pnpm@12.4.0"
+  "packageManager": "pnpm@12.4.1"
 }
