@@ -1,5 +1,24 @@
 # renovate-changesets
 
+## 0.2.2
+
+### Patch Changes
+
+- [#15](https://github.com/psirenny/renovate-changesets/pull/15)
+  [`3266153`](https://github.com/psirenny/renovate-changesets/commit/326615366cef2a0c1c564bec6823219a6659024f) Thanks
+  [@psirenny-bot](https://github.com/apps/psirenny-bot)! - Updated [pnpm](https://github.com/pnpm/pnpm) from `12.4.0` to
+  `12.4.1`.
+
+- [#15](https://github.com/psirenny/renovate-changesets/pull/15)
+  [`3266153`](https://github.com/psirenny/renovate-changesets/commit/326615366cef2a0c1c564bec6823219a6659024f) Thanks
+  [@psirenny-bot](https://github.com/apps/psirenny-bot)! - Updated [renovate](https://github.com/renovatebot/renovate)
+  from `44.74.1` to `44.79.6`.
+
+- [#15](https://github.com/psirenny/renovate-changesets/pull/15)
+  [`3266153`](https://github.com/psirenny/renovate-changesets/commit/326615366cef2a0c1c564bec6823219a6659024f) Thanks
+  [@psirenny-bot](https://github.com/apps/psirenny-bot)! - Updated [zod](https://github.com/colinhacks/zod) from `4.6.1`
+  to `4.6.2`.
+
 ## 0.2.1
 
 ### Patch Changes
