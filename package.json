@@ -1,6 +1,6 @@
 {
   "name": "renovate-changesets",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Changesets for all of your Renovate updates.",
   "keywords": [
     "catalog",
