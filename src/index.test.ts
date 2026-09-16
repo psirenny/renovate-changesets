@@ -19,11 +19,26 @@ import {
   type Upgrade,
 } from "./index.js";
 
-const encodeJson = (json: unknown): string => Buffer.from(JSON.stringify(json), "utf8").toString("base64");
-
 const removeWorkspace = async ({ fileDirectory }: { fileDirectory: string }): Promise<void> => {
   await rm(fileDirectory, { force: true, recursive: true });
 };
+
+/** Writes what Renovate's `dataFileTemplate` would leave on disk, outside the repository as Renovate does. */
+const writeUpgradesFileContent = async (content: string): Promise<string> => {
+  const fileDirectory = await mkdtemp(path.join(tmpdir(), "renovate-changesets-upgrades-"));
+
+  onTestFinished(async () => {
+    await removeWorkspace({ fileDirectory });
+  });
+
+  const filePath = path.join(fileDirectory, "upgrades.json");
+  await writeFile(filePath, content);
+
+  return filePath;
+};
+
+const writeUpgradesFile = async (upgradeList: unknown): Promise<string> =>
+  writeUpgradesFileContent(JSON.stringify(upgradeList));
 
 const writeFileMap = async ({
   fileDirectory,
@@ -471,7 +486,11 @@ const runIn = async ({
   fileDirectory: string;
   upgradeList: Upgrade[];
 }): Promise<void> => {
-  await run({ cwd: fileDirectory, templateFilePath: undefined, upgradeListString: encodeJson(upgradeList) });
+  await run({
+    cwd: fileDirectory,
+    templateFilePath: undefined,
+    upgradesFilePath: await writeUpgradesFile(upgradeList),
+  });
 };
 
 describe(run, () => {
@@ -488,14 +507,14 @@ describe(run, () => {
       run({
         cwd: fileDirectory,
         templateFilePath: ".github/missing.md",
-        upgradeListString: encodeJson([
+        upgradesFilePath: await writeUpgradesFile([
           { depName: "ky", displayTo: "2.0.0", newVersion: "2.0.0", packageFile: "package.json", packageName: "ky" },
         ]),
       }),
     ).rejects.toThrow(/ENOENT.*missing\.md/u);
   });
 
-  it("Fails on an undecodable payload rather than silently writing nothing", async () => {
+  it("Fails on an unusable upgrades file rather than silently writing nothing", async () => {
     expect.hasAssertions();
 
     const fileDirectory = await createTemporaryWorkspace({
@@ -504,11 +523,18 @@ describe(run, () => {
       },
     });
 
-    await expect(run({ cwd: fileDirectory, templateFilePath: undefined, upgradeListString: "" })).rejects.toThrow(
-      /JSON/u,
+    await expect(run({ cwd: fileDirectory, templateFilePath: undefined, upgradesFilePath: undefined })).rejects.toThrow(
+      /RENOVATE_POST_UPGRADE_COMMAND_DATA_FILE/u,
     );
     await expect(
-      run({ cwd: fileDirectory, templateFilePath: undefined, upgradeListString: "not base64 encoded json" }),
+      run({ cwd: fileDirectory, templateFilePath: undefined, upgradesFilePath: "missing.json" }),
+    ).rejects.toThrow(/ENOENT.*missing\.json/u);
+    await expect(
+      run({
+        cwd: fileDirectory,
+        templateFilePath: undefined,
+        upgradesFilePath: await writeUpgradesFileContent("not json"),
+      }),
     ).rejects.toThrow(/JSON/u);
     await expect(readChangesets({ fileDirectory })).resolves.toStrictEqual([]);
   });
@@ -646,11 +672,13 @@ describe(main, () => {
       { depName: "ky", displayTo: "2.0.0", newVersion: "2.0.0", packageFile: "package.json", packageName: "ky" },
     ];
 
-    await expect(main([encodeJson(upgradeList), "--cwd", fileDirectory])).resolves.toBe(0);
+    vi.stubEnv("RENOVATE_POST_UPGRADE_COMMAND_DATA_FILE", await writeUpgradesFile(upgradeList));
+
+    await expect(main(["--cwd", fileDirectory])).resolves.toBe(0);
     await expect(readChangesets({ fileDirectory })).resolves.toHaveLength(1);
   });
 
-  it("Reports a missing payload as a failure, since Renovate always sends one", async () => {
+  it("Reports a missing upgrades file as a failure, since Renovate always writes one", async () => {
     expect.hasAssertions();
 
     const fileDirectory = await createTemporaryWorkspace({
@@ -660,7 +688,7 @@ describe(main, () => {
     });
 
     await expect(main(["--cwd", fileDirectory])).resolves.toBe(1);
-    mainRecorder.assertLogged({ level: "error", message: /JSON/u });
+    mainRecorder.assertLogged({ level: "error", message: /RENOVATE_POST_UPGRADE_COMMAND_DATA_FILE/u });
     await expect(readChangesets({ fileDirectory })).resolves.toStrictEqual([]);
   });
 
@@ -673,8 +701,10 @@ describe(main, () => {
       },
     });
 
-    // `e30=` is base64 for `{}` — decodable JSON, but not the array Renovate is supposed to send.
-    await expect(main(["e30=", "--cwd", fileDirectory])).resolves.toBe(1);
+    // Decodable JSON, but not the array Renovate is supposed to write.
+    vi.stubEnv("RENOVATE_POST_UPGRADE_COMMAND_DATA_FILE", await writeUpgradesFileContent("{}"));
+
+    await expect(main(["--cwd", fileDirectory])).resolves.toBe(1);
     mainRecorder.assertLogged({ level: "error", message: /expected array, received object/u });
   });
 
@@ -687,13 +717,14 @@ describe(main, () => {
         "package.json": '{ "name": "solo", "version": "1.0.0" }\n',
       },
     });
-    const payload = encodeJson([
-      { depName: "ky", displayTo: "2.0.0", newVersion: "2.0.0", packageFile: "package.json", packageName: "ky" },
-    ]);
-
-    await expect(main([payload, "--cwd", fileDirectory, "--template-file-path", ".github/changeset.md"])).resolves.toBe(
-      0,
+    vi.stubEnv(
+      "RENOVATE_POST_UPGRADE_COMMAND_DATA_FILE",
+      await writeUpgradesFile([
+        { depName: "ky", displayTo: "2.0.0", newVersion: "2.0.0", packageFile: "package.json", packageName: "ky" },
+      ]),
     );
+
+    await expect(main(["--cwd", fileDirectory, "--template-file-path", ".github/changeset.md"])).resolves.toBe(0);
 
     const changesetList = await readChangesets({ fileDirectory });
 
@@ -711,14 +742,16 @@ describe(main, () => {
         "package.json": '{ "name": "solo", "version": "1.0.0" }\n',
       },
     });
-    const payload = encodeJson([
-      { depName: "ky", displayTo: "2.0.0", newVersion: "2.0.0", packageFile: "package.json", packageName: "ky" },
-    ]);
-
     vi.stubEnv("RENOVATE_CHANGESETS_CWD", fileDirectory);
     vi.stubEnv("RENOVATE_CHANGESETS_TEMPLATE_FILE_PATH", ".github/changeset.md");
+    vi.stubEnv(
+      "RENOVATE_POST_UPGRADE_COMMAND_DATA_FILE",
+      await writeUpgradesFile([
+        { depName: "ky", displayTo: "2.0.0", newVersion: "2.0.0", packageFile: "package.json", packageName: "ky" },
+      ]),
+    );
 
-    await expect(main([payload])).resolves.toBe(0);
+    await expect(main([])).resolves.toBe(0);
 
     const changesetList = await readChangesets({ fileDirectory });
 
@@ -735,14 +768,17 @@ describe(main, () => {
         "package.json": '{ "name": "solo", "version": "1.0.0" }\n',
       },
     });
-    const payload = encodeJson([
-      { depName: "ky", displayTo: "2.0.0", newVersion: "2.0.0", packageFile: "package.json", packageName: "ky" },
-    ]);
+    vi.stubEnv(
+      "RENOVATE_POST_UPGRADE_COMMAND_DATA_FILE",
+      await writeUpgradesFile([
+        { depName: "ky", displayTo: "2.0.0", newVersion: "2.0.0", packageFile: "package.json", packageName: "ky" },
+      ]),
+    );
 
     // The environment points somewhere that would fail, so the run only succeeds if the flag wins.
     vi.stubEnv("RENOVATE_CHANGESETS_CWD", path.join(fileDirectory, "does-not-exist"));
 
-    await expect(main([payload, "--cwd", fileDirectory])).resolves.toBe(0);
+    await expect(main(["--cwd", fileDirectory])).resolves.toBe(0);
     await expect(readChangesets({ fileDirectory })).resolves.toHaveLength(1);
   });
 
@@ -753,7 +789,7 @@ describe(main, () => {
 
     try {
       await expect(main(["--help"])).resolves.toBe(0);
-      expect(spy.mock.calls.flat().join("\n")).toMatch(/renovate-changesets \[upgradeListString\]/u);
+      expect(spy.mock.calls.flat().join("\n")).toMatch(/Create changesets for Renovate dependency updates/u);
     } finally {
       spy.mockRestore();
     }
@@ -779,10 +815,10 @@ describe(main, () => {
     mainRecorder.assertLogged({ level: "error", message: /Unknown argument/u });
   });
 
-  it("Rejects a second positional argument", async () => {
+  it("Rejects a positional argument, so no one passes the payload itself", async () => {
     expect.hasAssertions();
 
-    await expect(main(["one", "two"])).resolves.toBe(1);
+    await expect(main(["one"])).resolves.toBe(1);
     mainRecorder.assertLogged({ level: "error", message: /Unknown argument/u });
   });
 });
@@ -1736,12 +1772,16 @@ const assertPlan = async ({ plan }: { plan: Plan }): Promise<void> => {
   try {
     await writeFileMap({ fileDirectory, fileMap: buildFileMap({ fixture }) });
 
+    const upgradesFilePath = path.join(fileDirectory, "upgrades.json");
+    await writeFile(
+      upgradesFilePath,
+      JSON.stringify(plan.upgradeList.map((upgrade, index) => buildUpgrade({ fixture, index, upgrade }))),
+    );
+
     const options = {
       cwd: fileDirectory,
       templateFilePath: plan.workspace.template === "custom" ? ".github/changeset.md" : undefined,
-      upgradeListString: encodeJson(
-        plan.upgradeList.map((upgrade, index) => buildUpgrade({ fixture, index, upgrade })),
-      ),
+      upgradesFilePath,
     };
 
     await run(options);

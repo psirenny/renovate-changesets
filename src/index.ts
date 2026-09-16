@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { env } from "node:process";
 
 import { readConfig } from "@changesets/config";
 import { defaultDetectOrder, detect, format as formatFiles } from "@changesets/format";
@@ -175,15 +176,22 @@ export const writeChangesets = async ({
 export const run = async ({
   cwd,
   templateFilePath,
-  upgradeListString,
+  upgradesFilePath,
 }: {
   cwd: string;
   templateFilePath: string | undefined;
-  upgradeListString: string;
+  upgradesFilePath: string | undefined;
 }): Promise<void> => {
+  if (upgradesFilePath === undefined) {
+    throw new Error(
+      "No upgrades file. Renovate writes one and names it in `RENOVATE_POST_UPGRADE_COMMAND_DATA_FILE` once " +
+        "`postUpgradeTasks.dataFileTemplate` is set.",
+    );
+  }
+
   const upgradeList = z
     .array(upgradeSchema)
-    .parse(JSON.parse(Buffer.from(upgradeListString, "base64").toString("utf8")));
+    .parse(JSON.parse(await readFile(path.resolve(cwd, upgradesFilePath), "utf8")));
 
   const template =
     templateFilePath === undefined ? defaultTemplate : await readFile(path.resolve(cwd, templateFilePath), "utf8");
@@ -204,12 +212,7 @@ export const main = async (argumentList: string[] = hideBin(process.argv)): Prom
   try {
     const argv = await yargs(argumentList)
       .scriptName("renovate-changesets")
-      .command("$0 [upgradeListString]", "Create changesets for Renovate dependency updates.", (command) =>
-        command.positional("upgradeListString", {
-          describe: "Renovate's `upgrades` array, as base64-encoded JSON",
-          type: "string",
-        }),
-      )
+      .command("$0", "Create changesets for Renovate dependency updates.")
       .option("cwd", {
         default: process.cwd(),
         describe: "The repository root, when it isn't where the command runs.",
@@ -235,7 +238,7 @@ export const main = async (argumentList: string[] = hideBin(process.argv)): Prom
     await run({
       cwd: argv.cwd,
       templateFilePath: argv["template-file-path"],
-      upgradeListString: typeof argv.upgradeListString === "string" ? argv.upgradeListString : "",
+      upgradesFilePath: env.RENOVATE_POST_UPGRADE_COMMAND_DATA_FILE,
     });
 
     return 0;
