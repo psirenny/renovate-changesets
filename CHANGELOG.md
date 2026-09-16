@@ -1,5 +1,26 @@
 # renovate-changesets
 
+## 1.0.0
+
+### Major Changes
+
+- [#19](https://github.com/psirenny/renovate-changesets/pull/19)
+  [`7f05f40`](https://github.com/psirenny/renovate-changesets/commit/7f05f40219786df35716fcd594c71c379c284c7e) Thanks
+  [@psirenny](https://github.com/psirenny)! - Switched from base-64 encoded argument to Renovate’s `dataFileTemplate`
+  that handles large JSON input.
+
+### Patch Changes
+
+- [#17](https://github.com/psirenny/renovate-changesets/pull/17)
+  [`1a3a2a6`](https://github.com/psirenny/renovate-changesets/commit/1a3a2a65da013296becd8e81c4687e4cbf249c95) Thanks
+  [@psirenny-bot](https://github.com/apps/psirenny-bot)! - Updated [renovate](https://github.com/renovatebot/renovate)
+  from `44.79.6` to `44.82.1`.
+
+- [#17](https://github.com/psirenny/renovate-changesets/pull/17)
+  [`1a3a2a6`](https://github.com/psirenny/renovate-changesets/commit/1a3a2a65da013296becd8e81c4687e4cbf249c95) Thanks
+  [@psirenny-bot](https://github.com/apps/psirenny-bot)! - Updated
+  [@fast-check/vitest](https://github.com/dubzzz/fast-check) from `0.4.1` to `0.5.0`.
+
 ## 0.2.2
 
 ### Patch Changes
