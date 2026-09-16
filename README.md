@@ -84,10 +84,8 @@ Configure Renovate:
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "postUpgradeTasks": {
-    "commands": [
-      "pnpm install --frozen-lockfile --ignore-scripts",
-      "pnpm renovate-changesets '{{{encodeBase64 (toJSON upgrades)}}}'"
-    ],
+    "commands": ["pnpm install --frozen-lockfile --ignore-scripts", "pnpm renovate-changesets"],
+    "dataFileTemplate": "{{{toJSON upgrades}}}",
     "executionMode": "branch"
   }
 }
@@ -146,7 +144,7 @@ jobs:
           LOG_FILE_LEVEL: info
           LOG_LEVEL: ${{ inputs.log-level }}
           RENOVATE_ALLOWED_COMMANDS:
-            '["^pnpm install --frozen-lockfile --ignore-scripts$", "^pnpm renovate-changesets"]'
+            '["^pnpm install --frozen-lockfile --ignore-scripts$", "^pnpm renovate-changesets$"]'
           RENOVATE_ALLOW_SHELL_EXECUTOR_FOR_POST_UPGRADE_COMMANDS: "true"
           RENOVATE_BINARY_SOURCE: global
           RENOVATE_DRY_RUN: ${{ inputs.is-dry-run == true && 'full' || '' }}
