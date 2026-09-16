@@ -189,7 +189,7 @@ failing the post-upgrade commands or carrying on with the old version and writin
 
 `strictDepBuilds` fails when a dependency introduces a build script that isn't in the `allowBuilds` list. Most of the
 time these build scripts are optional or unnecessary. It's recommended to ignore build scripts because adding them to
-the `allowBuilds` list requires cumbersome human intervention which hurts automatic dependency updates. It's preferred
+the `allowBuilds` list requires cumbersome human intervention which hurts automated dependency updates. It's preferred
 to skip failing build scripts and catch any potential problems in CI instead.
 
 **renovate.json**
