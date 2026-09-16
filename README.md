@@ -172,6 +172,7 @@ jobs:
 minimumReleaseAge: 4320
 minimumReleaseAgeStrict: false
 pmOnFail: download
+strictDepBuilds: false
 ```
 
 `minimumReleaseAge` is the PNPM side of Renovate's `security:minimumReleaseAgeNpm` preset, which holds back an update
@@ -185,6 +186,11 @@ mode conflicts with the `pnpm update --no-save` command Renovate uses when a new
 `packageManager` field. When PNPM itself is updated, there's a discrepancy between the version of PNPM Renovate runs
 during an update and the version of PNPM that it's upgrading to. `download` fetches the declared version instead of
 failing the post-upgrade commands or carrying on with the old version and writing the lockfile with it.
+
+`strictDepBuilds` fails when a dependency introduces a build script that isn't in the `allowBuilds` list. Most of the
+time these build scripts are optional or unnecessary. It's recommended to ignore build scripts because adding them to
+the `allowBuilds` list requires cumbersome human intervention which hurts automatic dependency updates. It's preferred
+to skip failing build scripts and catch any potential problems in CI instead.
 
 **renovate.json**
 

@@ -6,3 +6,4 @@ allowBuilds:
 minimumReleaseAge: 4320 # Keep this in sync with Renovate `security:minimumReleaseAgeNpm`.
 minimumReleaseAgeStrict: false
 pmOnFail: download
+strictDepBuilds: false
