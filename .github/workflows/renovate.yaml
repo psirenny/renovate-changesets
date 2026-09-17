@@ -53,7 +53,7 @@ jobs:
           LOG_FILE_LEVEL: warn
           LOG_LEVEL: ${{ inputs.log-level }}
           RENOVATE_ALLOWED_COMMANDS:
-            '["^pnpm install --frozen-lockfile --ignore-scripts$", "^pnpm run build$", "^node dist/cli\\.js ", "^pnpm
+            '["^pnpm install --frozen-lockfile --ignore-scripts$", "^pnpm run build$", "^node dist/cli\\.js$", "^pnpm
             run oxfmt:fix$"]'
           RENOVATE_BINARY_SOURCE: global
           RENOVATE_DRY_RUN: ${{ inputs.is-dry-run == true && 'full' || '' }}
