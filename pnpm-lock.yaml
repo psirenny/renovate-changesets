@@ -192,7 +192,7 @@ importers:
         version: 18.1.0
       zod:
         specifier: ^4.5.4
-        version: 4.6.4
+        version: 4.6.5
     devDependencies:
       '@changesets/changelog-github':
         specifier: 1.0.1
@@ -243,8 +243,8 @@ importers:
         specifier: 7.0.2001
         version: 7.0.2001
       renovate:
-        specifier: 44.82.5
-        version: 44.82.5(supports-color@7.2.0)(typanion@3.14.0)
+        specifier: 44.83.0
+        version: 44.83.0(supports-color@7.2.0)(typanion@3.14.0)
       tsdown:
         specifier: 0.23.0
         version: 0.23.0(typescript@7.0.2)
@@ -3595,8 +3595,8 @@ packages:
   remark@15.0.1:
     resolution: {integrity: sha512-Eht5w30ruCXgFmxVUSlNWQ9iiimq07URKeFS3hNc8cUWy1llX4KDWfyEDZRycMc+znsN9Ux5/tJ/BFdgdOwA3A==}
 
-  renovate@44.82.5:
-    resolution: {integrity: sha512-97uu5z7OfHfYTkIpbqPyG4EgovqisaQsxfHFPPGenGDrlapJs29nlnYtjqU1Rs831u+GMkCK2+Gf2USXAXWelw==}
+  renovate@44.83.0:
+    resolution: {integrity: sha512-Iaf6ris+E45OZDNogJX0E0RIkiv8Pwv9ScLXFyOP/jMMB/fZjjiSy7ezsfclvHPnKunQHER8qbY/FeS0hxFf+Q==}
     engines: {node: ^24.11.0, pnpm: ^11.0.0}
     hasBin: true
 
@@ -4319,8 +4319,8 @@ packages:
   zod@4.5.4:
     resolution: {integrity: sha512-sC95tT5iHHH9gtpj6A81kh+NEaRAUFN+qlUPDUbRfOMvNf5QCBqsb3WgvnpVtK5Y+4UfA6KqufotuTvMGiTlsA==}
 
-  zod@4.6.4:
-    resolution: {integrity: sha512-AXSD6hvGdvRjajG/l1cC+d6IrhH+sjmPKtYeQdJIK8MFJl3LyClzS+o/YsVC+zQZPupAaeH5skwwm8YqYH7BqA==}
+  zod@4.6.5:
+    resolution: {integrity: sha512-v5l/aFXZQeai4awLbOpSoHecE9UiMrnfx75tEXLjNonXVARxQ5mOeipTjROUchszUNCqnE+hqAMujRsRHsut2Q==}
 
   zwitch@2.0.4:
     resolution: {integrity: sha512-bXE4cR/kVZhKZX/RjPEflHaKVhUVl85noU3v6b8apfQEc1x4A+zBxjZ4lN8LqGd6WZ3dl98pY4o717VFmoPp+A==}
@@ -5286,7 +5286,7 @@ snapshots:
       fs-extra: 11.4.0
       toml-eslint-parser: 1.0.3
       upath: 3.0.8
-      zod: 4.6.4
+      zod: 4.6.5
 
   '@renovatebot/good-enough-parser@2.0.1':
     dependencies:
@@ -7813,7 +7813,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  renovate@44.82.5(supports-color@7.2.0)(typanion@3.14.0):
+  renovate@44.83.0(supports-color@7.2.0)(typanion@3.14.0):
     dependencies:
       '@aws-sdk/client-codecommit': 3.1117.0
       '@aws-sdk/client-ec2': 3.1117.0
@@ -8643,6 +8643,6 @@ snapshots:
 
   zod@4.5.4: {}
 
-  zod@4.6.4: {}
+  zod@4.6.5: {}
 
   zwitch@2.0.4: {}
