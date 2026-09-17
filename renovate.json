@@ -54,9 +54,10 @@
     "commands": [
       "pnpm install --frozen-lockfile --ignore-scripts",
       "pnpm run build",
-      "node dist/cli.js '{{{encodeBase64 (toJSON upgrades)}}}'",
+      "node dist/cli.js",
       "pnpm run oxfmt:fix"
     ],
+    "dataFileTemplate": "{{{toJSON upgrades}}}",
     "executionMode": "branch"
   },
   "prConcurrentLimit": 0,
