@@ -36,14 +36,6 @@
       "groupName": "non-major dependencies",
       "groupSlug": "non-major",
       "matchUpdateTypes": ["bump", "digest", "minor", "patch", "pin", "pinDigest", "replacement", "rollback"]
-    },
-    {
-      "description": "Treat every semver 0.x dependency as a minor update rather than a major update.",
-      "automerge": true,
-      "groupName": "non-major dependencies",
-      "groupSlug": "non-major",
-      "matchCurrentVersion": "<1.0.0",
-      "matchUpdateTypes": ["major"]
     }
   ],
   "platformAutomerge": true,
