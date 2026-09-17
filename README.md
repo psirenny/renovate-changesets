@@ -198,10 +198,16 @@ to skip failing build scripts and catch any potential problems in CI instead.
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   // …
+  "commitMessageExtra": "to `{{#if isPinDigest}}{{{newDigestShort}}}{{else}}{{#if isMajor}}{{prettyNewMajor}}{{else}}{{#if isSingleVersion}}{{prettyNewVersion}}{{else}}{{#if newValue}}{{{newValue}}}{{else}}{{{newDigestShort}}}{{/if}}{{/if}}{{/if}}{{/if}}`",
+  "commitMessageTopic": "`{{{depName}}}`",
   "gitIgnoredAuthors": ["12345678+your-bot[bot]@users.noreply.github.com"],
   "platformCommit": "enabled",
 }
 ```
+
+`commitMessageTopic` and `commitMessageExtra` wrap the dependency name and the version in a pull request title as code,
+matching the changesets this writes. Renovate names a few dependencies itself during extraction, `pnpm` and `node` among
+them, and those keep a plain name.
 
 `platformCommit` allows Renovate to sign commits by using the Git platform API instead of using Git directly.
 
