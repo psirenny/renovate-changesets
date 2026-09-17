@@ -198,10 +198,14 @@ to skip failing build scripts and catch any potential problems in CI instead.
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   // …
+  "commitMessageExtra": "to `{{#if isPinDigest}}{{{newDigestShort}}}{{else}}{{#if isMajor}}{{prettyNewMajor}}{{else}}{{#if isSingleVersion}}{{prettyNewVersion}}{{else}}{{#if newValue}}{{{newValue}}}{{else}}{{{newDigestShort}}}{{/if}}{{/if}}{{/if}}{{/if}}`",
+  "commitMessageTopic": "`{{{depName}}}`",
   "gitIgnoredAuthors": ["12345678+your-bot[bot]@users.noreply.github.com"],
   "platformCommit": "enabled",
 }
 ```
+
+`commitMessageTopic`, `commitMessageExtra` modify pull request titles to match the text generated in Changeset messages.
 
 `platformCommit` allows Renovate to sign commits by using the Git platform API instead of using Git directly.
 
