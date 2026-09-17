@@ -205,9 +205,7 @@ to skip failing build scripts and catch any potential problems in CI instead.
 }
 ```
 
-`commitMessageTopic` and `commitMessageExtra` wrap the dependency name and the version in a pull request title as code,
-matching the changesets this writes. Renovate names a few dependencies itself during extraction, `pnpm` and `node` among
-them, and those keep a plain name.
+`commitMessageTopic`, `commitMessageExtra` modify pull request titles to match the text generated in Changeset messages.
 
 `platformCommit` allows Renovate to sign commits by using the Git platform API instead of using Git directly.
 
