@@ -243,8 +243,8 @@ importers:
         specifier: 7.0.2001
         version: 7.0.2001
       renovate:
-        specifier: 44.93.5
-        version: 44.93.5(supports-color@7.2.0)(typanion@3.14.0)
+        specifier: 44.95.0
+        version: 44.95.0(supports-color@7.2.0)(typanion@3.14.0)
       tsdown:
         specifier: 0.23.0
         version: 0.23.0(typescript@7.0.2)
@@ -1135,8 +1135,8 @@ packages:
       '@opentelemetry/api':
         optional: true
 
-  '@renovatebot/detect-tools@4.0.14':
-    resolution: {integrity: sha512-ZPKqa1fV99sCtKTCmPTG2NyIO6v/DO1QlN4hPJqg54QQm9gvhfcE2razmV10eZYC0J7Fx5/wwXXDvww/fd7Dqw==}
+  '@renovatebot/detect-tools@4.0.16':
+    resolution: {integrity: sha512-YaY4fbmNQj5qMT+a5OGwGwJAYNXnGBmkciW9ipFm9+GZkKHz1Klw8cvOcbAkyNs0m+dZzonm28iLMpuWuijzdg==}
     engines: {node: '>=22.12.0', pnpm: '>=10.0.0'}
 
   '@renovatebot/good-enough-parser@2.0.1':
@@ -3595,8 +3595,8 @@ packages:
   remark@15.0.1:
     resolution: {integrity: sha512-Eht5w30ruCXgFmxVUSlNWQ9iiimq07URKeFS3hNc8cUWy1llX4KDWfyEDZRycMc+znsN9Ux5/tJ/BFdgdOwA3A==}
 
-  renovate@44.93.5:
-    resolution: {integrity: sha512-g2EdnihNyrxPtc3Ro0xrtQQUQ/Z3NL6QohimT3WPmrYUy2c0nDeBx9jmih8Kb/uMHuwIPTw+qZwcW4YWKWesxQ==}
+  renovate@44.95.0:
+    resolution: {integrity: sha512-YHmgsEcTUOZ3bCLpRuXIWJT5Sj/ZlaWZPzyeXPUfIJ9Xy4W9vfG4MvhOL6DGiQgrEUsnfz1B4WsXfE4kjnzyOg==}
     engines: {node: ^24.11.0, pnpm: ^11.0.0}
     hasBin: true
 
@@ -4316,8 +4316,8 @@ packages:
   yuku-parser@0.9.5:
     resolution: {integrity: sha512-IBnAdNVMswWbJcM7woPluOudectJzFjJ1N8jVRxP9Uq4CIv5hZdBIcdmtRbFDYF/Ph2j2gVup4YJ4N9mh0jYFA==}
 
-  zod@4.5.4:
-    resolution: {integrity: sha512-sC95tT5iHHH9gtpj6A81kh+NEaRAUFN+qlUPDUbRfOMvNf5QCBqsb3WgvnpVtK5Y+4UfA6KqufotuTvMGiTlsA==}
+  zod@4.6.1:
+    resolution: {integrity: sha512-341aRWQsve0rvronKNTqZpjmzdbUDlFuzHaI/XLg/Ej82qffDJRRfBTCuv7+9q/rMjB6LSLyEBnW4InJeMtt/Q==}
 
   zod@4.6.5:
     resolution: {integrity: sha512-v5l/aFXZQeai4awLbOpSoHecE9UiMrnfx75tEXLjNonXVARxQ5mOeipTjROUchszUNCqnE+hqAMujRsRHsut2Q==}
@@ -5281,7 +5281,7 @@ snapshots:
     optionalDependencies:
       '@opentelemetry/api': 1.9.1
 
-  '@renovatebot/detect-tools@4.0.14':
+  '@renovatebot/detect-tools@4.0.16':
     dependencies:
       fs-extra: 11.4.0
       toml-eslint-parser: 1.0.3
@@ -7813,7 +7813,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  renovate@44.93.5(supports-color@7.2.0)(typanion@3.14.0):
+  renovate@44.95.0(supports-color@7.2.0)(typanion@3.14.0):
     dependencies:
       '@aws-sdk/client-codecommit': 3.1117.0
       '@aws-sdk/client-ec2': 3.1117.0
@@ -7846,7 +7846,7 @@ snapshots:
       '@pnpm/parse-overrides': 1001.0.4
       '@qnighy/marshal': 0.1.3
       '@redis/client': 6.2.1(@opentelemetry/api@1.9.1)
-      '@renovatebot/detect-tools': 4.0.14
+      '@renovatebot/detect-tools': 4.0.16
       '@renovatebot/good-enough-parser': 2.0.1
       '@renovatebot/osv-offline': 3.0.10(supports-color@7.2.0)
       '@renovatebot/pep440': 5.0.1
@@ -7937,7 +7937,7 @@ snapshots:
       xmldoc: 3.0.0
       yaml: 2.9.0
       yauzl: 3.4.0
-      zod: 4.5.4
+      zod: 4.6.1
     optionalDependencies:
       openpgp: 6.3.1
       re2: 1.26.1
@@ -8641,7 +8641,7 @@ snapshots:
       '@yuku-parser/binding-win32-arm64': 0.9.5
       '@yuku-parser/binding-win32-x64': 0.9.5
 
-  zod@4.5.4: {}
+  zod@4.6.1: {}
 
   zod@4.6.5: {}
 
