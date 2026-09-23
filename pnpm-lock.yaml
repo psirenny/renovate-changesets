@@ -177,7 +177,7 @@ importers:
         version: 1.0.0
       '@logtape/logtape':
         specifier: ^2.3.2
-        version: 2.3.5
+        version: 2.3.6
       '@manypkg/get-packages':
         specifier: ^3.1.0
         version: 3.1.0
@@ -204,11 +204,11 @@ importers:
         specifier: 0.5.0
         version: 0.5.0(vitest@5.0.1)
       '@logtape/lint':
-        specifier: 2.3.5
-        version: 2.3.5
+        specifier: 2.3.6
+        version: 2.3.6
       '@logtape/testing':
-        specifier: 2.3.4
-        version: 2.3.4(@logtape/logtape@2.3.5)
+        specifier: 2.3.6
+        version: 2.3.6(@logtape/logtape@2.3.6)
       '@types/node':
         specifier: 26.6.2
         version: 26.6.2
@@ -243,8 +243,8 @@ importers:
         specifier: 7.0.2002
         version: 7.0.2002
       renovate:
-        specifier: 44.103.1
-        version: 44.103.1(supports-color@7.2.0)(typanion@3.14.0)
+        specifier: 44.103.4
+        version: 44.103.4(supports-color@7.2.0)(typanion@3.14.0)
       tsdown:
         specifier: 0.23.0
         version: 0.23.0(typescript@7.0.2)
@@ -550,21 +550,21 @@ packages:
   '@kwsites/promise-deferred@1.1.1':
     resolution: {integrity: sha512-GaHYm+c0O9MjZRu0ongGBRbinu8gVAMd2UZjji6jVmqKtZluZnptXGWhz1E8j8D2HJ3f/yMxKAUC0b+57wncIw==}
 
-  '@logtape/lint@2.3.5':
-    resolution: {integrity: sha512-awHePXH+kE7MRxLLiTC4Ivoxf2NL/6rA201sLSeKiXG9vLtQNA5fwa2us+4zqyHo9+vCvi2o1UGSSyL5YdeDDg==}
+  '@logtape/lint@2.3.6':
+    resolution: {integrity: sha512-VLnfPNiNrQ7ulXeQEx01YuvrF+PgexzcJWQixP4j8rdvT4MlXXj0Ozavygx2FaDx+J47iW2yyTxs/wHgFvk8yQ==}
     peerDependencies:
       eslint: '>=8.0.0'
     peerDependenciesMeta:
       eslint:
         optional: true
 
-  '@logtape/logtape@2.3.5':
-    resolution: {integrity: sha512-s4LlalG0JO2Fg8ENy1aQVdOS47VOD2pip6mOW29TNuCxW5zOhrQk/ck/xs77M7O15b2pK2KnDSr7L0Tf6LIUXg==}
+  '@logtape/logtape@2.3.6':
+    resolution: {integrity: sha512-1ajI6YRkq+gIpgYVhOcJ4Mn5QUarSvWnnuj8SNMjwrjIcOy1ANEIcZyaLN+vPtL2MCa845D8ghXR8xDA+c3Khg==}
 
-  '@logtape/testing@2.3.4':
-    resolution: {integrity: sha512-brRoiggYWOrU/oxuOV5FLzB8k/A7P9/pR2Rs258WaeCg5J/RGfR+adn3rEpKEhy/wUGvhqaGy6EgrzgP2I754w==}
+  '@logtape/testing@2.3.6':
+    resolution: {integrity: sha512-AbpeoTNhIiBdO86lMFY9aHNdEFWOVTibVF9C+L8hdX0KnWwi9v4dW5e/gGjgAuDxX1kHjlN6N7nh9MtDnzxKvg==}
     peerDependencies:
-      '@logtape/logtape': ^2.3.4
+      '@logtape/logtape': ^2.3.6
 
   '@manypkg/find-root@3.1.0':
     resolution: {integrity: sha512-BcSqCyKhBVZ5YkSzOiheMCV41kqAFptW6xGqYSTjkVTl9XQpr+pqHhwgGCOHQtjDCv7Is6EFyA14Sm5GVbVABA==}
@@ -3404,8 +3404,8 @@ packages:
     resolution: {integrity: sha512-T8BatKGY+k5rU+Q/GTYgrEf2r4xRMevAN5mtXc2aPc4rS1j3s+vWTaO2Wag94neXuCAUAs8cxBL9EeB5EA6diw==}
     engines: {node: '>=16'}
 
-  p-map@7.0.7:
-    resolution: {integrity: sha512-VaWRu2i4FJNRtiRWCuuQRgfQ1B7a6+gMSrO+3j0EQi/k0ULfS9kosRxGoiqwzIjZTDI02tGfk5mXXltLg6QtfQ==}
+  p-map@7.0.8:
+    resolution: {integrity: sha512-MitaVsCuCFIvOLLPIU7NnfrZvS9H9h7kwMUkDo+T2pEISaJD48IV9S8iIdXB7PsvvdxyYcsSTTrr90XKsbulNw==}
     engines: {node: '>=18'}
 
   p-mutex@1.0.0:
@@ -3416,8 +3416,8 @@ packages:
     resolution: {integrity: sha512-NXAOdnEe5FsZJfT4oK84lE1Y5cFFdWlRuOo5tww8DyNMxyRXwn39fIkUtNLKppcPC+UYU/bXujNCUGDv01y7CA==}
     engines: {node: '>=20'}
 
-  p-throttle@8.1.0:
-    resolution: {integrity: sha512-c1wmXavsHZIC4g1OLhOsafK6jZSAeMo0Ap3yivj59PUcCkpacy5YgWdgIp/dB4vp1JZrfBSsPCR0YuADB+ENLQ==}
+  p-throttle@8.1.1:
+    resolution: {integrity: sha512-xxWFBUyvbrQ10XC3VAr0SoXoOCKXqCX/yvbFIkBE98upphHFwjIKR6AId13ZH3jngFfF6yK43QTOtrngYAmFMA==}
     engines: {node: '>=20'}
 
   p-timeout@7.0.1:
@@ -3595,8 +3595,8 @@ packages:
   remark@15.0.1:
     resolution: {integrity: sha512-Eht5w30ruCXgFmxVUSlNWQ9iiimq07URKeFS3hNc8cUWy1llX4KDWfyEDZRycMc+znsN9Ux5/tJ/BFdgdOwA3A==}
 
-  renovate@44.103.1:
-    resolution: {integrity: sha512-QSiC97uIA5i6geIOqPvfJywVH/gl+/Pr8c3OKB+nmcrdPKM9kGcnA8k1mNNwMN3gFQGZWLY0+A/5GtJI5CK6AA==}
+  renovate@44.103.4:
+    resolution: {integrity: sha512-l5O7BQQ9bxUri5/4B0aoBgcAL7EVs5UmbwUybXfaYi0Y4AFuT0SKI7HPjPRBqL7148KF0Nfx2PTW/1r0qok55Q==}
     engines: {node: ^24.11.0, pnpm: ^11.0.0}
     hasBin: true
 
@@ -4279,6 +4279,11 @@ packages:
     engines: {node: '>= 14.6'}
     hasBin: true
 
+  yaml@2.9.1:
+    resolution: {integrity: sha512-3NxN8+78OdzbT7C/WjGsyfPAtJaN3FNDsWxv7Y7mcDsT/oOmgW8BpyQQFFBnvZE3j9Y2Sdz1ULFLezL7Eb2yFw==}
+    engines: {node: '>= 14.6'}
+    hasBin: true
+
   yargs-parser@20.2.9:
     resolution: {integrity: sha512-y11nGElTIV+CT3Zv9t7VKl+Q3hTQoT9a1Qzezhhl6Rp21gJ/IVTW7Z3y9EWXhuUBC2Shnf+DX0antecpAwSP8w==}
     engines: {node: '>=10'}
@@ -4316,8 +4321,8 @@ packages:
   yuku-parser@0.9.5:
     resolution: {integrity: sha512-IBnAdNVMswWbJcM7woPluOudectJzFjJ1N8jVRxP9Uq4CIv5hZdBIcdmtRbFDYF/Ph2j2gVup4YJ4N9mh0jYFA==}
 
-  zod@4.6.2:
-    resolution: {integrity: sha512-lh5RCAGFa1Cm2hjtNwLQhSs/AsqdWnTQaBER9fEwN/88pSh7KOtJavtBx/0VlkN/uFd61SwYmljLMDAsHlvzBQ==}
+  zod@4.6.3:
+    resolution: {integrity: sha512-qTMC0QXIpf4iH+G0rCJl6ZjKiFpqAU9++JDN8tqts3KP58MWeJU/in9tDccsHqlOolCIrBKsiPXR8vCLhe4QhA==}
 
   zod@4.6.5:
     resolution: {integrity: sha512-v5l/aFXZQeai4awLbOpSoHecE9UiMrnfx75tEXLjNonXVARxQ5mOeipTjROUchszUNCqnE+hqAMujRsRHsut2Q==}
@@ -4730,7 +4735,7 @@ snapshots:
   '@changesets/parse@1.0.0':
     dependencies:
       '@changesets/types': 7.0.0
-      yaml: 2.9.0
+      yaml: 2.9.1
 
   '@changesets/pre@3.0.0':
     dependencies:
@@ -4827,13 +4832,13 @@ snapshots:
 
   '@kwsites/promise-deferred@1.1.1': {}
 
-  '@logtape/lint@2.3.5': {}
+  '@logtape/lint@2.3.6': {}
 
-  '@logtape/logtape@2.3.5': {}
+  '@logtape/logtape@2.3.6': {}
 
-  '@logtape/testing@2.3.4(@logtape/logtape@2.3.5)':
+  '@logtape/testing@2.3.6(@logtape/logtape@2.3.6)':
     dependencies:
-      '@logtape/logtape': 2.3.5
+      '@logtape/logtape': 2.3.6
 
   '@manypkg/find-root@3.1.0':
     dependencies:
@@ -4848,7 +4853,7 @@ snapshots:
     dependencies:
       jju: 1.4.0
       tinyglobby: 0.2.17
-      yaml: 2.9.0
+      yaml: 2.9.1
 
   '@nodelib/fs.scandir@2.1.5':
     dependencies:
@@ -5893,7 +5898,7 @@ snapshots:
       minipass-collect: 2.0.1
       minipass-flush: 1.0.7
       minipass-pipeline: 1.2.4
-      p-map: 7.0.7
+      p-map: 7.0.8
       ssri: 13.0.1
 
   cacheable-lookup@5.0.4: {}
@@ -7594,7 +7599,7 @@ snapshots:
 
   p-map@6.0.0: {}
 
-  p-map@7.0.7: {}
+  p-map@7.0.8: {}
 
   p-mutex@1.0.0:
     dependencies:
@@ -7605,7 +7610,7 @@ snapshots:
       eventemitter3: 5.0.4
       p-timeout: 7.0.1
 
-  p-throttle@8.1.0: {}
+  p-throttle@8.1.1: {}
 
   p-timeout@7.0.1: {}
 
@@ -7813,7 +7818,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  renovate@44.103.1(supports-color@7.2.0)(typanion@3.14.0):
+  renovate@44.103.4(supports-color@7.2.0)(typanion@3.14.0):
     dependencies:
       '@aws-sdk/client-codecommit': 3.1117.0
       '@aws-sdk/client-ec2': 3.1117.0
@@ -7908,9 +7913,9 @@ snapshots:
       neotraverse: 1.0.1
       node-html-parser: 9.0.4
       p-all: 5.0.1
-      p-map: 7.0.7
+      p-map: 7.0.8
       p-queue: 9.3.3
-      p-throttle: 8.1.0
+      p-throttle: 8.1.1
       parse-link-header: 2.0.0
       prettier: 3.9.6
       protobufjs: 8.8.0
@@ -7935,9 +7940,9 @@ snapshots:
       url-join: 5.0.0
       validate-npm-package-name: 7.0.2
       xmldoc: 3.0.0
-      yaml: 2.9.0
+      yaml: 2.9.1
       yauzl: 3.4.0
-      zod: 4.6.2
+      zod: 4.6.3
     optionalDependencies:
       openpgp: 6.3.1
       re2: 1.26.1
@@ -8569,7 +8574,10 @@ snapshots:
 
   yallist@5.0.0: {}
 
-  yaml@2.9.0: {}
+  yaml@2.9.0:
+    optional: true
+
+  yaml@2.9.1: {}
 
   yargs-parser@20.2.9: {}
 
@@ -8641,7 +8649,7 @@ snapshots:
       '@yuku-parser/binding-win32-arm64': 0.9.5
       '@yuku-parser/binding-win32-x64': 0.9.5
 
-  zod@4.6.2: {}
+  zod@4.6.3: {}
 
   zod@4.6.5: {}
 
