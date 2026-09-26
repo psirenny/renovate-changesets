@@ -1,5 +1,117 @@
 # renovate-changesets
 
+## 1.0.2
+
+### Patch Changes
+
+- [#31](https://github.com/psirenny/renovate-changesets/pull/31)
+  [`1071089`](https://github.com/psirenny/renovate-changesets/commit/1071089a61c7511ed84e811e9ec760949b1eb617) Thanks
+  [@psirenny-bot](https://github.com/apps/psirenny-bot)! - Updated [pnpm](https://github.com/pnpm/pnpm) from `12.4.2` to
+  `12.5.1`.
+
+- [#35](https://github.com/psirenny/renovate-changesets/pull/35)
+  [`1017c5f`](https://github.com/psirenny/renovate-changesets/commit/1017c5fcc52f5074dcd53e646d8dc48b058ab476) Thanks
+  [@psirenny-bot](https://github.com/apps/psirenny-bot)! - Updated [yargs](https://github.com/yargs/yargs) from `18.1.0`
+  to `18.2.0`.
+
+- [#31](https://github.com/psirenny/renovate-changesets/pull/31)
+  [`1071089`](https://github.com/psirenny/renovate-changesets/commit/1071089a61c7511ed84e811e9ec760949b1eb617) Thanks
+  [@psirenny-bot](https://github.com/apps/psirenny-bot)! - Updated [renovate](https://github.com/renovatebot/renovate)
+  from `44.97.4` to `44.103.1`.
+
+- [#33](https://github.com/psirenny/renovate-changesets/pull/33)
+  [`1a1328d`](https://github.com/psirenny/renovate-changesets/commit/1a1328dbe9d68ae933dd0e315be184aa9176805f) Thanks
+  [@psirenny-bot](https://github.com/apps/psirenny-bot)! - Updated [renovate](https://github.com/renovatebot/renovate)
+  from `44.103.1` to `44.103.4`.
+
+- [#31](https://github.com/psirenny/renovate-changesets/pull/31)
+  [`1071089`](https://github.com/psirenny/renovate-changesets/commit/1071089a61c7511ed84e811e9ec760949b1eb617) Thanks
+  [@psirenny-bot](https://github.com/apps/psirenny-bot)! - Updated
+  [@types/node](https://github.com/DefinitelyTyped/DefinitelyTyped) from `26.6.1` to `26.6.2`.
+
+- [#31](https://github.com/psirenny/renovate-changesets/pull/31)
+  [`1071089`](https://github.com/psirenny/renovate-changesets/commit/1071089a61c7511ed84e811e9ec760949b1eb617) Thanks
+  [@psirenny-bot](https://github.com/apps/psirenny-bot)! - Updated [turbo](https://github.com/vercel/turborepo) from
+  `2.10.13` to `2.11.2`.
+
+- [#37](https://github.com/psirenny/renovate-changesets/pull/37)
+  [`cf8515b`](https://github.com/psirenny/renovate-changesets/commit/cf8515b9d2c41a3cad206bb72d9e21b8a3630625) Thanks
+  [@psirenny-bot](https://github.com/apps/psirenny-bot)! - Updated `smol-toml` from `1.8.0` to `1.9.0`.
+
+- [#37](https://github.com/psirenny/renovate-changesets/pull/37)
+  [`cf8515b`](https://github.com/psirenny/renovate-changesets/commit/cf8515b9d2c41a3cad206bb72d9e21b8a3630625) Thanks
+  [@psirenny-bot](https://github.com/apps/psirenny-bot)! - Updated [@logtape/lint](https://github.com/dahlia/logtape)
+  from `2.3.6` to `2.3.7`.
+
+- [#33](https://github.com/psirenny/renovate-changesets/pull/33)
+  [`1a1328d`](https://github.com/psirenny/renovate-changesets/commit/1a1328dbe9d68ae933dd0e315be184aa9176805f) Thanks
+  [@psirenny-bot](https://github.com/apps/psirenny-bot)! - Updated [@logtape/testing](https://github.com/dahlia/logtape)
+  from `2.3.4` to `2.3.6`.
+
+- [#36](https://github.com/psirenny/renovate-changesets/pull/36)
+  [`6808828`](https://github.com/psirenny/renovate-changesets/commit/68088284b2e1916f379816894d6d2b9b446f5215) Thanks
+  [@psirenny-bot](https://github.com/apps/psirenny-bot)! - Updated [oxlint](https://github.com/oxc-project/oxc) from
+  `1.83.0` to `1.85.0`.
+
+- [#37](https://github.com/psirenny/renovate-changesets/pull/37)
+  [`cf8515b`](https://github.com/psirenny/renovate-changesets/commit/cf8515b9d2c41a3cad206bb72d9e21b8a3630625) Thanks
+  [@psirenny-bot](https://github.com/apps/psirenny-bot)! - Updated [renovate](https://github.com/renovatebot/renovate)
+  from `44.106.0` to `44.108.1`.
+
+- [#36](https://github.com/psirenny/renovate-changesets/pull/36)
+  [`6808828`](https://github.com/psirenny/renovate-changesets/commit/68088284b2e1916f379816894d6d2b9b446f5215) Thanks
+  [@psirenny-bot](https://github.com/apps/psirenny-bot)! - Updated [renovate](https://github.com/renovatebot/renovate)
+  from `44.104.1` to `44.106.0`.
+
+- [#37](https://github.com/psirenny/renovate-changesets/pull/37)
+  [`cf8515b`](https://github.com/psirenny/renovate-changesets/commit/cf8515b9d2c41a3cad206bb72d9e21b8a3630625) Thanks
+  [@psirenny-bot](https://github.com/apps/psirenny-bot)! - Updated [turbo](https://github.com/vercel/turborepo) from
+  `2.11.2` to `2.11.3`.
+
+- [#37](https://github.com/psirenny/renovate-changesets/pull/37)
+  [`cf8515b`](https://github.com/psirenny/renovate-changesets/commit/cf8515b9d2c41a3cad206bb72d9e21b8a3630625) Thanks
+  [@psirenny-bot](https://github.com/apps/psirenny-bot)! - Updated [@logtape/testing](https://github.com/dahlia/logtape)
+  from `2.3.6` to `2.3.7`.
+
+- [#33](https://github.com/psirenny/renovate-changesets/pull/33)
+  [`1a1328d`](https://github.com/psirenny/renovate-changesets/commit/1a1328dbe9d68ae933dd0e315be184aa9176805f) Thanks
+  [@psirenny-bot](https://github.com/apps/psirenny-bot)! - Updated [@logtape/lint](https://github.com/dahlia/logtape)
+  from `2.3.5` to `2.3.6`.
+
+- [#33](https://github.com/psirenny/renovate-changesets/pull/33)
+  [`1a1328d`](https://github.com/psirenny/renovate-changesets/commit/1a1328dbe9d68ae933dd0e315be184aa9176805f) Thanks
+  [@psirenny-bot](https://github.com/apps/psirenny-bot)! - Updated [@logtape/logtape](https://github.com/dahlia/logtape)
+  from `2.3.5` to `2.3.6`.
+
+- [#37](https://github.com/psirenny/renovate-changesets/pull/37)
+  [`cf8515b`](https://github.com/psirenny/renovate-changesets/commit/cf8515b9d2c41a3cad206bb72d9e21b8a3630625) Thanks
+  [@psirenny-bot](https://github.com/apps/psirenny-bot)! - Updated [@logtape/logtape](https://github.com/dahlia/logtape)
+  from `2.3.6` to `2.3.7`.
+
+- [#35](https://github.com/psirenny/renovate-changesets/pull/35)
+  [`1017c5f`](https://github.com/psirenny/renovate-changesets/commit/1017c5fcc52f5074dcd53e646d8dc48b058ab476) Thanks
+  [@psirenny-bot](https://github.com/apps/psirenny-bot)! - Updated [renovate](https://github.com/renovatebot/renovate)
+  from `44.103.4` to `44.104.1`.
+
+- [#36](https://github.com/psirenny/renovate-changesets/pull/36)
+  [`6808828`](https://github.com/psirenny/renovate-changesets/commit/68088284b2e1916f379816894d6d2b9b446f5215) Thanks
+  [@psirenny-bot](https://github.com/apps/psirenny-bot)! - Updated [oxfmt](https://github.com/oxc-project/oxc) from
+  `0.68.0` to `0.70.0`.
+
+- [#35](https://github.com/psirenny/renovate-changesets/pull/35)
+  [`1017c5f`](https://github.com/psirenny/renovate-changesets/commit/1017c5fcc52f5074dcd53e646d8dc48b058ab476) Thanks
+  [@psirenny-bot](https://github.com/apps/psirenny-bot)! - Updated
+  [markdownlint-cli2](https://github.com/DavidAnson/markdownlint-cli2) from `0.23.2` to `0.23.3`.
+
+- [#37](https://github.com/psirenny/renovate-changesets/pull/37)
+  [`cf8515b`](https://github.com/psirenny/renovate-changesets/commit/cf8515b9d2c41a3cad206bb72d9e21b8a3630625) Thanks
+  [@psirenny-bot](https://github.com/apps/psirenny-bot)! - Updated [pnpm](https://github.com/pnpm/pnpm) from `12.5.1` to
+  `12.6.0`.
+
+- [#31](https://github.com/psirenny/renovate-changesets/pull/31)
+  [`1071089`](https://github.com/psirenny/renovate-changesets/commit/1071089a61c7511ed84e811e9ec760949b1eb617) Thanks
+  [@psirenny-bot](https://github.com/apps/psirenny-bot)! - Updated `oxlint-tsgolint` from `7.0.2001` to `7.0.2002`.
+
 ## 1.0.1
 
 ### Patch Changes
