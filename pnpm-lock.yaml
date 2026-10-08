@@ -177,7 +177,7 @@ importers:
         version: 1.0.0
       '@logtape/logtape':
         specifier: ^2.3.2
-        version: 2.3.10
+        version: 2.3.11
       '@manypkg/get-packages':
         specifier: ^3.1.0
         version: 3.1.0
@@ -204,11 +204,11 @@ importers:
         specifier: 0.5.0
         version: 0.5.0(vitest@5.0.3)
       '@logtape/lint':
-        specifier: 2.3.10
-        version: 2.3.10
+        specifier: 2.3.11
+        version: 2.3.11
       '@logtape/testing':
-        specifier: 2.3.10
-        version: 2.3.10(@logtape/logtape@2.3.10)
+        specifier: 2.3.11
+        version: 2.3.11(@logtape/logtape@2.3.11)
       '@types/node':
         specifier: 26.6.4
         version: 26.6.4
@@ -243,8 +243,8 @@ importers:
         specifier: 7.0.2003
         version: 7.0.2003
       renovate:
-        specifier: 44.132.5
-        version: 44.132.5(supports-color@7.2.0)(typanion@3.14.0)
+        specifier: 44.133.0
+        version: 44.133.0(supports-color@7.2.0)(typanion@3.14.0)
       tsdown:
         specifier: 0.23.0
         version: 0.23.0(typescript@7.0.2)
@@ -550,21 +550,21 @@ packages:
   '@kwsites/promise-deferred@1.1.1':
     resolution: {integrity: sha512-GaHYm+c0O9MjZRu0ongGBRbinu8gVAMd2UZjji6jVmqKtZluZnptXGWhz1E8j8D2HJ3f/yMxKAUC0b+57wncIw==}
 
-  '@logtape/lint@2.3.10':
-    resolution: {integrity: sha512-0xre4Gojl9++G0fqDCTl7K97eVUCyas/5OnrOrIUU46rVQ1K8BOoW768fBYiNvv45OIXTUlZbRWHS4iotiJieQ==}
+  '@logtape/lint@2.3.11':
+    resolution: {integrity: sha512-w0+NvPBG09shCHJLmIKrnrcrlH9IYCzJxuFPe1rW1+/YXsUFSZMywxhhtx8JX/79NM+sb7J90wDQFnrHUvjPvQ==}
     peerDependencies:
       eslint: '>=8.0.0'
     peerDependenciesMeta:
       eslint:
         optional: true
 
-  '@logtape/logtape@2.3.10':
-    resolution: {integrity: sha512-IdOrFCHMSGYz+fq7xrxKCjXxItHHdiVenNaHeFJhXOkaVXFAHCdrPPBQJvJVmYbAUY5PCP8kSMxY+GIoxkmwHA==}
+  '@logtape/logtape@2.3.11':
+    resolution: {integrity: sha512-T7T+IShQBxofHCs7J1kVMZPLLHYAXAOqPEc/xwzd6/2q8va/D/t/HP7uCeJzTQOywpXF1tbyz15O4VHT8NF2hw==}
 
-  '@logtape/testing@2.3.10':
-    resolution: {integrity: sha512-Qp5uFAFVKmV20+J7rkLojtQZANih+MUwHrydBKKciSXVN9pi5Lg+jZxe4BMpXpGlSfCMSlNJU8bldWRgbC5E2A==}
+  '@logtape/testing@2.3.11':
+    resolution: {integrity: sha512-D+iRmsGpVcPnr9iUfNfRQC4oaZ0YZbBdezSq80/TKUpWgOit3IQ6t2qzw2K+q5+66APGWkd95+vybBvp9lbceA==}
     peerDependencies:
-      '@logtape/logtape': ^2.3.10
+      '@logtape/logtape': ^2.3.11
 
   '@manypkg/find-root@3.1.0':
     resolution: {integrity: sha512-BcSqCyKhBVZ5YkSzOiheMCV41kqAFptW6xGqYSTjkVTl9XQpr+pqHhwgGCOHQtjDCv7Is6EFyA14Sm5GVbVABA==}
@@ -3607,8 +3607,8 @@ packages:
   remark@15.0.1:
     resolution: {integrity: sha512-Eht5w30ruCXgFmxVUSlNWQ9iiimq07URKeFS3hNc8cUWy1llX4KDWfyEDZRycMc+znsN9Ux5/tJ/BFdgdOwA3A==}
 
-  renovate@44.132.5:
-    resolution: {integrity: sha512-3bCOC/3fz5ILyaRyOQU5WYmxRMlJsDyRe1piozt14lBeQL0phqD3ixXpH9GtWjBE0zxp7jbzMvWReflHhg7f5A==}
+  renovate@44.133.0:
+    resolution: {integrity: sha512-7yrwgrgQYeuIdJyHfq5rW7NcljJZJLw4fxVTsYA+2chdRHb7VffnvxW8hEyJxPd9UGPtqNFIZdyvUWdIebtXsQ==}
     engines: {node: ^24.11.0, pnpm: ^11.0.0}
     hasBin: true
 
@@ -4832,13 +4832,13 @@ snapshots:
 
   '@kwsites/promise-deferred@1.1.1': {}
 
-  '@logtape/lint@2.3.10': {}
+  '@logtape/lint@2.3.11': {}
 
-  '@logtape/logtape@2.3.10': {}
+  '@logtape/logtape@2.3.11': {}
 
-  '@logtape/testing@2.3.10(@logtape/logtape@2.3.10)':
+  '@logtape/testing@2.3.11(@logtape/logtape@2.3.11)':
     dependencies:
-      '@logtape/logtape': 2.3.10
+      '@logtape/logtape': 2.3.11
 
   '@manypkg/find-root@3.1.0':
     dependencies:
@@ -7819,7 +7819,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  renovate@44.132.5(supports-color@7.2.0)(typanion@3.14.0):
+  renovate@44.133.0(supports-color@7.2.0)(typanion@3.14.0):
     dependencies:
       '@aws-sdk/client-codecommit': 3.1139.0
       '@aws-sdk/client-ec2': 3.1139.0
