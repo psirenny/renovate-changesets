@@ -1,5 +1,0 @@
----
-"renovate-changesets": patch
----
-
-Updated [handlebars](https://github.com/handlebars-lang/handlebars.js) from `4.7.9` to `4.7.10`.
