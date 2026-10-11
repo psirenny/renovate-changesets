@@ -1,11 +1,11 @@
 <svg width="213" height="72" viewBox="0 0 213 72" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Renovate to Changesets">
   <title>renovate-changesets</title>
   <defs>
-    <!-- Radix Colors (dark): slate12 → slate11 → slate10 -->
+    <!-- Radix Colors (dark): gray12 → gray11 → gray10 -->
     <linearGradient id="logo-flow" x1="0" y1="36" x2="213" y2="36" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#edeef0" />
-      <stop offset="0.5" stop-color="#afb3ba" />
-      <stop offset="1" stop-color="#777b84" />
+      <stop offset="0" stop-color="#eeeeee" />
+      <stop offset="0.5" stop-color="#b3b3b3" />
+      <stop offset="1" stop-color="#7b7b7b" />
     </linearGradient>
   </defs>
   <g transform="translate(0 5) scale(1.9375)">
