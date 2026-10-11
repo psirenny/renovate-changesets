@@ -1,11 +1,18 @@
 <svg width="213" height="72" viewBox="0 0 213 72" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Renovate to Changesets">
   <title>renovate-changesets</title>
   <defs>
-    <!-- Radix Colors (light): gray12 → gray11 → gray9 -->
-    <linearGradient id="logo-flow" x1="0" y1="36" x2="213" y2="36" gradientUnits="userSpaceOnUse">
+    <!--
+      Radix gray (light): gray12 / gray11 / gray9
+      Two-period gradient + SMIL x-shift so the flow loops on GitHub READMEs.
+    -->
+    <linearGradient id="logo-flow" gradientUnits="userSpaceOnUse" x1="0" y1="36" x2="426" y2="36">
       <stop offset="0" stop-color="#202020" />
-      <stop offset="0.5" stop-color="#646464" />
-      <stop offset="1" stop-color="#8d8d8d" />
+      <stop offset="0.25" stop-color="#8d8d8d" />
+      <stop offset="0.5" stop-color="#202020" />
+      <stop offset="0.75" stop-color="#8d8d8d" />
+      <stop offset="1" stop-color="#202020" />
+      <animate attributeName="x1" values="0;-213" dur="3s" repeatCount="indefinite" />
+      <animate attributeName="x2" values="426;213" dur="3s" repeatCount="indefinite" />
     </linearGradient>
   </defs>
   <g transform="translate(0 5) scale(1.9375)">
