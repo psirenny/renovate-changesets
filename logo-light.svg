@@ -2,26 +2,26 @@
   <title>renovate-changesets</title>
   <defs>
     <!--
-      Mostly Radix gray12, with a Raycast red→violet glint (#FF6363 → #8B5CF6)
-      that starts at Renovate and sweeps L→R through the arrow into Changesets.
-      Stroke: gray6. Two identical periods; x1 -213→0 keeps the loop seamless.
+      Mostly Radix gray12, with a narrow Raycast red→violet glint.
+      Period is wider than the logo (280px) so only one glint is on-screen at a time
+      as it sweeps Renovate → arrow → Changesets. Stroke: gray6.
     -->
-    <linearGradient id="logo-flow" gradientUnits="userSpaceOnUse" x1="-213" y1="36" x2="213" y2="36">
+    <linearGradient id="logo-flow" gradientUnits="userSpaceOnUse" x1="-280" y1="36" x2="280" y2="36">
       <stop offset="0" stop-color="#202020" />
-      <stop offset="0.04" stop-color="#202020" />
-      <stop offset="0.06" stop-color="#FF6363" />
-      <stop offset="0.08" stop-color="#FF2D95" />
-      <stop offset="0.10" stop-color="#8B5CF6" />
-      <stop offset="0.12" stop-color="#202020" />
+      <stop offset="0.03" stop-color="#202020" />
+      <stop offset="0.04" stop-color="#FF6363" />
+      <stop offset="0.05" stop-color="#FF2D95" />
+      <stop offset="0.06" stop-color="#8B5CF6" />
+      <stop offset="0.07" stop-color="#202020" />
       <stop offset="0.5" stop-color="#202020" />
-      <stop offset="0.54" stop-color="#202020" />
-      <stop offset="0.56" stop-color="#FF6363" />
-      <stop offset="0.58" stop-color="#FF2D95" />
-      <stop offset="0.60" stop-color="#8B5CF6" />
-      <stop offset="0.62" stop-color="#202020" />
+      <stop offset="0.53" stop-color="#202020" />
+      <stop offset="0.54" stop-color="#FF6363" />
+      <stop offset="0.55" stop-color="#FF2D95" />
+      <stop offset="0.56" stop-color="#8B5CF6" />
+      <stop offset="0.57" stop-color="#202020" />
       <stop offset="1" stop-color="#202020" />
-      <animate attributeName="x1" values="-213;0" dur="4s" repeatCount="indefinite" />
-      <animate attributeName="x2" values="213;426" dur="4s" repeatCount="indefinite" />
+      <animate attributeName="x1" values="-280;0" dur="4s" repeatCount="indefinite" />
+      <animate attributeName="x2" values="280;560" dur="4s" repeatCount="indefinite" />
     </linearGradient>
   </defs>
   <g transform="translate(0 5) scale(1.9375)">
