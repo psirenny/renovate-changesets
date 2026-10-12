@@ -1,8 +1,10 @@
 <!-- markdownlint-disable MD033 MD041 -->
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="logo-dark.svg">
-  <img src="logo-light.svg" alt="Renovate to Changesets" height="72">
-</picture>
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="logo-dark.svg">
+    <img src="logo-light.svg" alt="Renovate to Changesets" height="72">
+  </picture>
+</p>
 <!-- markdownlint-enable MD033 MD041 -->
 
 # renovate-changesets
