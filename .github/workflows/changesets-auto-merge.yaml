@@ -9,7 +9,7 @@ concurrency:
 jobs:
   changesets:
     name: "Changesets: Merge"
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - id: release-bot-token
         name: Mint psirenny Bot installation token
