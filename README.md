@@ -1,53 +1,27 @@
 <!-- markdownlint-disable MD033 MD041 -->
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="logo-dark.svg">
+    <img src="logo-light.svg" alt="Renovate to Changesets" height="86">
+  </picture>
+</p>
+
+<h4 align="center">Renovate Changesets</h4>
+
+<p align="center">
+  <a href="https://github.com/psirenny/renovate-changesets/actions/workflows/ci.yaml"><img src="https://github.com/psirenny/renovate-changesets/actions/workflows/ci.yaml/badge.svg" alt="CI"></a>
+</p>
+
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="logo-dark.svg">
-  <img src="logo-light.svg" alt="Renovate to Changesets" height="72">
+  <source media="(prefers-color-scheme: dark)" srcset="examples-dark.svg">
+  <img src="examples-light.svg" width="100%" alt="Two stacked changelog windows. packages/api/CHANGELOG.md, version 1.2.1 patch changes: Pinned hono to 4.13.7. Updated zod from 4.5.4 to 4.6.1. Updated the npm lockfile. Replaced eslint with oxlint 1.82.0. Updated node from 24.8.0-alpine to 24.9.0-alpine. Version 1.2.0 minor changes: Added cursor-based pagination to the /projects endpoint. Added per-token rate limiting with Retry-After headers. Patch changes: Updated hono from 4.12.9 to 4.13.0. Updated pino from 9.12.0 to 9.13.0. Updated node from 24.7.0-alpine to 24.8.0-alpine. Behind it, packages/app/CHANGELOG.md, version 1.2.1 patch changes: Updated postgres from 18.1 to 18.2. Replaced eslint with oxlint 1.82.0. Updated zod from 4.5.4 to 4.6.1. Updated next from 15.2.2 to 15.2.3. [Security: CRITICAL] Rolled back vitest to 4.1.10.">
 </picture>
 <!-- markdownlint-enable MD033 MD041 -->
 
-# renovate-changesets
+## About
 
-[![CI](https://github.com/psirenny/renovate-changesets/actions/workflows/ci.yaml/badge.svg)](https://github.com/psirenny/renovate-changesets/actions/workflows/ci.yaml)
-
-A Renovate `postUpgradeTask` to generate [changesets](https://github.com/changesets/changesets) from dependency updates.
-This is intentionally _not_ a GitHub Action because inferring dependencies from a Renovate pull request is rife with
-errors.
-
-## Examples
-
-**packages/api/CHANGELOG.md**
-
-```markdown
-# api
-
-## 1.2.4
-
-### Patch Changes
-
-- Pinned [hono](https://github.com/honojs/hono) to `4.13.7`.
-- Updated [zod](https://github.com/colinhacks/zod) from `4.5.4` to `4.6.1`.
-- Updated the `cargo` lockfile.
-- Replaced `eslint` with `oxlint` `1.82.0`.
-- Updated `node` from `24.8.0-alpine` to `24.9.0-alpine`.
-```
-
-**packages/application/CHANGELOG.md**
-
-```markdown
-# application
-
-## 1.2.4
-
-### Patch Changes
-
-- Updated `postgres` from `18.1` to `18.2`.
-- Replaced `eslint` with `oxlint` `1.82.0`.
-- Updated [zod](https://github.com/colinhacks/zod) from `4.5.4` to `4.6.1`.
-- Updated [next](https://github.com/vercel/next.js) from `15.2.2` to `15.2.3`. [Security: CRITICAL]
-- Rolled back [vitest](https://github.com/vitest-dev/vitest) to `4.1.10`.
-```
-
-## Support
+Generate [changesets](https://github.com/changesets/changesets) from dependency update pull requests opened by
+[Renovate](https://github.com/renovatebot/renovate).
 
 | Ecosystem          | Supported |
 | ------------------ | --------- |
