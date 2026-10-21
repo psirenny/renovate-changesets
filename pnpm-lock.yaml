@@ -243,8 +243,8 @@ importers:
         specifier: 7.0.2004
         version: 7.0.2004
       renovate:
-        specifier: 44.165.1
-        version: 44.165.1(supports-color@7.2.0)(typanion@3.14.0)
+        specifier: 44.166.0
+        version: 44.166.0(supports-color@7.2.0)(typanion@3.14.0)
       tsdown:
         specifier: 0.23.1
         version: 0.23.1(typescript@7.0.2)
@@ -735,12 +735,14 @@ packages:
   '@opentelemetry/sdk-trace-base@2.12.0':
     resolution: {integrity: sha512-JOERgZCxRM06FEJ5kEWxlSRChah6MmXDx3KwCruqEv/iEyLkTokCSemf2y1w8oIHtfrr8EVTpzebq/31vn2Cpg==}
     engines: {node: ^18.19.0 || >=20.6.0}
+    deprecated: Use @opentelemetry/sdk-trace package
     peerDependencies:
       '@opentelemetry/api': '>=1.3.0 <1.10.0'
 
   '@opentelemetry/sdk-trace-node@2.12.0':
     resolution: {integrity: sha512-9DufH1IlmQMoKAfot5y/FhTP1RnmhLb5K6eKmJO/bvzPjYwPAazoiAUbTZFdPbqxOXN0FEbhZx/e6SB1Og4jmg==}
     engines: {node: ^18.19.0 || >=20.6.0}
+    deprecated: Use @opentelemetry/sdk-trace package
     peerDependencies:
       '@opentelemetry/api': '>=1.0.0 <1.10.0'
 
@@ -1144,8 +1146,8 @@ packages:
       '@opentelemetry/api':
         optional: true
 
-  '@renovatebot/base-image@13.132.1':
-    resolution: {integrity: sha512-g5lqE8CeiO6pJouhIb/LzdDoptE0Ws+kigHMz/Enejs5QviLJPGXQmdYKnP953Gr5b9Y+8WLWH75GQ0Cun3UeA==}
+  '@renovatebot/base-image@13.133.0':
+    resolution: {integrity: sha512-+rdKTOa8k0p22Y/OCGCWCzaTsc6EI/SisCjMUUTvSZRPwl1R3AISmC5df5N9RZAT40YTorE5kCNM1ZLzhdFIFQ==}
     engines: {node: '>=24.10.0'}
     peerDependencies:
       zod: ^4.0.0
@@ -3458,8 +3460,8 @@ packages:
     resolution: {integrity: sha512-u82N74LFzG8ca+dD8puPnplTXoGH4fTPpVGuIbt36G3qvNlkvfD0lEAZSxaly3KX8TS/L1A1gsCEmvKmBcVbkQ==}
     engines: {node: ^10 || ^12 || >=14}
 
-  prettier@3.9.9:
-    resolution: {integrity: sha512-Z/CJHIkdujO/OtN7nXUii0Rf3VT5SRuhjBA82Xvu2XhBUgX3nhP67T0LHceBdQLex7OOFGTox+Q5Yg8Jk2Qivg==}
+  prettier@3.9.10:
+    resolution: {integrity: sha512-skGHTH1Yb9QvaTC4hWnRTzEYtCpApF0UMBPz+t/0ZPzP8ihefo/btKd+QA7pUE0fEwA1SbS/NmhyEcstdXOIdA==}
     engines: {node: '>=14'}
     hasBin: true
 
@@ -3557,8 +3559,8 @@ packages:
   remark@15.0.1:
     resolution: {integrity: sha512-Eht5w30ruCXgFmxVUSlNWQ9iiimq07URKeFS3hNc8cUWy1llX4KDWfyEDZRycMc+znsN9Ux5/tJ/BFdgdOwA3A==}
 
-  renovate@44.165.1:
-    resolution: {integrity: sha512-3UMIjDp9FDKBJigxFO27O2rdLdQaXjNpOXQM5xXYYbRsJPIM1wfhbudXflroFHr3Q/oNrEZE3U9cAisbwWlnEA==}
+  renovate@44.166.0:
+    resolution: {integrity: sha512-ZKvUoZluEjYE09P/TW3UsoNSNHv4lZi/H+sQpl7sgy/yvASCfhBsy79sWVt/CwCxyfITskXjZlyCEdoHrepLEA==}
     engines: {node: ^24.11.0, pnpm: ^11.0.0}
     hasBin: true
 
@@ -5255,7 +5257,7 @@ snapshots:
     optionalDependencies:
       '@opentelemetry/api': 1.9.1
 
-  '@renovatebot/base-image@13.132.1(zod@4.6.5)':
+  '@renovatebot/base-image@13.133.0(zod@4.6.5)':
     dependencies:
       '@containerbase/base': 14.42.0(zod@4.6.5)
     optionalDependencies:
@@ -7697,7 +7699,7 @@ snapshots:
       picocolors: 1.1.1
       source-map-js: 1.2.1
 
-  prettier@3.9.9: {}
+  prettier@3.9.10: {}
 
   pretty-ms@9.3.1:
     dependencies:
@@ -7830,7 +7832,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  renovate@44.165.1(supports-color@7.2.0)(typanion@3.14.0):
+  renovate@44.166.0(supports-color@7.2.0)(typanion@3.14.0):
     dependencies:
       '@aws-sdk/client-codecommit': 3.1139.0
       '@aws-sdk/client-ec2': 3.1139.0
@@ -7863,7 +7865,7 @@ snapshots:
       '@pnpm/parse-overrides': 1001.0.4
       '@qnighy/marshal': 0.1.3
       '@redis/client': 6.3.0(@opentelemetry/api@1.9.1)
-      '@renovatebot/base-image': 13.132.1(zod@4.6.5)
+      '@renovatebot/base-image': 13.133.0(zod@4.6.5)
       '@renovatebot/detect-tools': 4.0.21
       '@renovatebot/good-enough-parser': 2.0.1
       '@renovatebot/osv-offline': 3.0.12(supports-color@7.2.0)
@@ -7916,7 +7918,6 @@ snapshots:
       jsonata: 2.2.1
       jsonc-weaver: 0.3.1
       klona: 2.0.6
-      lru-cache: 11.5.3
       luxon: 3.7.2
       markdown-it: 15.0.2
       markdown-table: 3.0.4
@@ -7930,7 +7931,7 @@ snapshots:
       p-queue: 9.3.3
       p-throttle: 8.1.1
       parse-link-header: 2.0.0
-      prettier: 3.9.9
+      prettier: 3.9.10
       protobufjs: 8.8.0
       punycode: 2.3.1
       remark: 15.0.1(supports-color@7.2.0)
@@ -7948,7 +7949,6 @@ snapshots:
       strip-json-comments: 5.0.3
       tar: 7.5.22
       toml-eslint-parser: 1.0.3
-      tslib: 2.8.1
       upath: 3.0.8
       url-join: 5.0.0
       validate-npm-package-name: 7.0.2
