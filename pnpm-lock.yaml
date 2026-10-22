@@ -177,7 +177,7 @@ importers:
         version: 1.0.0
       '@logtape/logtape':
         specifier: ^2.3.2
-        version: 2.4.1
+        version: 2.4.2
       '@manypkg/get-packages':
         specifier: ^3.1.0
         version: 3.1.0
@@ -204,11 +204,11 @@ importers:
         specifier: 0.5.0
         version: 0.5.0(vitest@5.0.5)
       '@logtape/lint':
-        specifier: 2.4.1
-        version: 2.4.1
+        specifier: 2.4.2
+        version: 2.4.2
       '@logtape/testing':
-        specifier: 2.4.1
-        version: 2.4.1(@logtape/logtape@2.4.1)
+        specifier: 2.4.2
+        version: 2.4.2(@logtape/logtape@2.4.2)
       '@types/node':
         specifier: 26.6.5
         version: 26.6.5
@@ -243,8 +243,8 @@ importers:
         specifier: 7.0.2004
         version: 7.0.2004
       renovate:
-        specifier: 44.166.0
-        version: 44.166.0(supports-color@7.2.0)(typanion@3.14.0)
+        specifier: 44.167.5
+        version: 44.167.5(supports-color@7.2.0)(typanion@3.14.0)
       tsdown:
         specifier: 0.23.1
         version: 0.23.1(typescript@7.0.2)
@@ -559,21 +559,21 @@ packages:
   '@kwsites/promise-deferred@1.1.1':
     resolution: {integrity: sha512-GaHYm+c0O9MjZRu0ongGBRbinu8gVAMd2UZjji6jVmqKtZluZnptXGWhz1E8j8D2HJ3f/yMxKAUC0b+57wncIw==}
 
-  '@logtape/lint@2.4.1':
-    resolution: {integrity: sha512-07a83I2IwokTsefR6dnQXUUSSrlI28azUG7eTYFhPna0ObrFpWsytQnszPYa0l9I318QAAAAiE8NK/AM/9M5pw==}
+  '@logtape/lint@2.4.2':
+    resolution: {integrity: sha512-2axZPC4gUivOT2elGPBEZTGO72sA2+boIR1mIU6D4oW728fFMn49uOCl4uLGq+P4vTAiE2ufLWAkQxhQw/I9ZA==}
     peerDependencies:
       eslint: '>=8.0.0'
     peerDependenciesMeta:
       eslint:
         optional: true
 
-  '@logtape/logtape@2.4.1':
-    resolution: {integrity: sha512-faEZkjQf5pI8WsnCXbpBInC9SeWqYUNAtLviTLkCI3JLHFkV1bKrfxbIJc96TVqqVjSUz8LYtX0JWKdiBwEpCg==}
+  '@logtape/logtape@2.4.2':
+    resolution: {integrity: sha512-YJyC1gEMgWmTqJTRtKkjgasEbi8/0gP7Dj8n6bL46gQIAhpTY8uXJ+1QYMOgF5asotlGMvy3G7ejXUe45Yd1MQ==}
 
-  '@logtape/testing@2.4.1':
-    resolution: {integrity: sha512-EXCQTP+uc7X1U/G83pJ4mgKXdovLZrp9TFp8xM4L2FHB/OG0SG3O78EvSTJY4AiD+4+JneSIywH5XSYdkoadPQ==}
+  '@logtape/testing@2.4.2':
+    resolution: {integrity: sha512-O48triyR65Bf87ejnaisVMQYx9uZvROQsht/6mNKMA/PF2WGWPYFbP9SKdha67Bcf8S2XGRe4YbxN+2Teg6Qpg==}
     peerDependencies:
-      '@logtape/logtape': ^2.4.1
+      '@logtape/logtape': ^2.4.2
 
   '@manypkg/find-root@3.1.0':
     resolution: {integrity: sha512-BcSqCyKhBVZ5YkSzOiheMCV41kqAFptW6xGqYSTjkVTl9XQpr+pqHhwgGCOHQtjDCv7Is6EFyA14Sm5GVbVABA==}
@@ -1146,8 +1146,8 @@ packages:
       '@opentelemetry/api':
         optional: true
 
-  '@renovatebot/base-image@13.133.0':
-    resolution: {integrity: sha512-+rdKTOa8k0p22Y/OCGCWCzaTsc6EI/SisCjMUUTvSZRPwl1R3AISmC5df5N9RZAT40YTorE5kCNM1ZLzhdFIFQ==}
+  '@renovatebot/base-image@13.133.1':
+    resolution: {integrity: sha512-LWwR+lXO5QzQUY6cnDT693Nbm7i6cVcP4rNIhJjFioDhx/+0LyPFOIqcxLYQfhTkHK7j4Uwc8sTssSBT4JKMLw==}
     engines: {node: '>=24.10.0'}
     peerDependencies:
       zod: ^4.0.0
@@ -1155,8 +1155,8 @@ packages:
       zod:
         optional: true
 
-  '@renovatebot/detect-tools@4.0.21':
-    resolution: {integrity: sha512-1+yfO/pivwJu1m8180pfxHSVlx9ByZVDUa9xcvRLBraAFTn+ziDeOBoKVqpr4lElYwZ6kBNfE945dCVewz6edQ==}
+  '@renovatebot/detect-tools@4.0.22':
+    resolution: {integrity: sha512-WmTPjbvMvrpv2sGaCyMNlBCt+R1pp372mkyFkNchl6b15/dvtRD99JlQ54hcSU/fXP8xNXbHO+4gFZSZTM3DpQ==}
     engines: {node: '>=22.12.0', pnpm: '>=10.0.0'}
 
   '@renovatebot/good-enough-parser@2.0.1':
@@ -3356,16 +3356,16 @@ packages:
     resolution: {integrity: sha512-T8BatKGY+k5rU+Q/GTYgrEf2r4xRMevAN5mtXc2aPc4rS1j3s+vWTaO2Wag94neXuCAUAs8cxBL9EeB5EA6diw==}
     engines: {node: '>=16'}
 
-  p-map@7.1.0:
-    resolution: {integrity: sha512-HaSJ9hNZOxTUSATfB48Qi7U2+GF1eECjI39nkeLmCWQrSOYr1z4NepR0rpWiZO77pYwUWU2cJ5NIgsmoFCsYDQ==}
+  p-map@7.1.1:
+    resolution: {integrity: sha512-6Lh3jQPLthYujSrlw6ccWXBGZTkoTCz27Hd92g79LH/kjAbgoEu0t442cCCNbegPSJsA0lwDX8z0bcKtkpA32g==}
     engines: {node: '>=18'}
 
   p-mutex@1.0.0:
     resolution: {integrity: sha512-UlthGzEMsg2VnZAR58wkzL7muskxtNamoTR1Q6/VYBUKqPaMM+YtSncjWIvyjfUvVECKck1SYC/4XIWWJU3gBw==}
     engines: {node: '>=20'}
 
-  p-queue@9.3.3:
-    resolution: {integrity: sha512-NXAOdnEe5FsZJfT4oK84lE1Y5cFFdWlRuOo5tww8DyNMxyRXwn39fIkUtNLKppcPC+UYU/bXujNCUGDv01y7CA==}
+  p-queue@9.3.5:
+    resolution: {integrity: sha512-Lki/zhXFVmDhesBUn/yHRLW9Bte7mE7xoFHzTR8sIomV7a2z+LxYAPkGvdfidNiu4fKSfjtawixxSHcZci5QcQ==}
     engines: {node: '>=20'}
 
   p-throttle@8.1.1:
@@ -3477,8 +3477,8 @@ packages:
     resolution: {integrity: sha512-dYDWdjSl5RNb7SgPxGQcRU+GtvP7s2fpkrY0r432PcOIaZ0/rBcxEZnQN67iJhFuQiVw754JDoPruPCNdGsbjg==}
     engines: {node: '>=12.0.0'}
 
-  protobufjs@8.8.0:
-    resolution: {integrity: sha512-N3xhQ5yyBx3vQq4gubBfASzYhJGNzeDbjqBpu61g7UVylsN/qyffU96TKWD3GbbLOKF82VGNRNvv1+BFgE31Eg==}
+  protobufjs@8.8.1:
+    resolution: {integrity: sha512-d9e9179bjXSJdpJ3+R9fP8hzXsnKLyxTjHLG1dUzje8a27pPyXCe6PrcRtgx2rjoM3IZzHd2vAs+6J/BsO1k7Q==}
     engines: {node: '>=12.0.0'}
 
   protocols@2.0.2:
@@ -3559,8 +3559,8 @@ packages:
   remark@15.0.1:
     resolution: {integrity: sha512-Eht5w30ruCXgFmxVUSlNWQ9iiimq07URKeFS3hNc8cUWy1llX4KDWfyEDZRycMc+znsN9Ux5/tJ/BFdgdOwA3A==}
 
-  renovate@44.166.0:
-    resolution: {integrity: sha512-ZKvUoZluEjYE09P/TW3UsoNSNHv4lZi/H+sQpl7sgy/yvASCfhBsy79sWVt/CwCxyfITskXjZlyCEdoHrepLEA==}
+  renovate@44.167.5:
+    resolution: {integrity: sha512-wo5aqWZxcFebnVqKjyfymHkpTf+SIMpYEgop9uiUKPFSk5K5Hf+ukPSU6M9GhL2RulH2j34cdCNPhf6s5oLKmg==}
     engines: {node: ^24.11.0, pnpm: ^11.0.0}
     hasBin: true
 
@@ -4290,8 +4290,8 @@ packages:
     resolution: {integrity: sha512-t5pANCF6k9rgJre7jk8DMAU4lEoI1oWWZgXk0fcvmCYQquFVWv0rf6Awwt56nnPiHb0E24dhtrpfgf9ChTCbrQ==}
     engines: {node: '>=14.18.0'}
 
-  zod@4.6.5:
-    resolution: {integrity: sha512-v5l/aFXZQeai4awLbOpSoHecE9UiMrnfx75tEXLjNonXVARxQ5mOeipTjROUchszUNCqnE+hqAMujRsRHsut2Q==}
+  zod@4.6.6:
+    resolution: {integrity: sha512-4UmzQUF5fxvfcYHlbjBmejU+w+hbDnWFx4aS8kBx7nPBHcO2SqPbpAG8snbdg+Xse4pRefR98hgjFgIMCI/UhA==}
 
   zod@4.6.7:
     resolution: {integrity: sha512-g8W2D2kU6a8untc053fX1uVBKzM7yqAxW/3zwk83+6RyF2+SKOuV+c0wBDhUwzV1PaGapmZH+rmcUzPf+3CGwg==}
@@ -4742,9 +4742,9 @@ snapshots:
       fast-wrap-ansi: 0.2.2
       sisteransi: 1.0.5
 
-  '@containerbase/base@14.42.0(zod@4.6.5)':
+  '@containerbase/base@14.42.0(zod@4.6.6)':
     optionalDependencies:
-      zod: 4.6.5
+      zod: 4.6.6
 
   '@fast-check/vitest@0.5.0(vitest@5.0.5)':
     dependencies:
@@ -4805,13 +4805,13 @@ snapshots:
 
   '@kwsites/promise-deferred@1.1.1': {}
 
-  '@logtape/lint@2.4.1': {}
+  '@logtape/lint@2.4.2': {}
 
-  '@logtape/logtape@2.4.1': {}
+  '@logtape/logtape@2.4.2': {}
 
-  '@logtape/testing@2.4.1(@logtape/logtape@2.4.1)':
+  '@logtape/testing@2.4.2(@logtape/logtape@2.4.2)':
     dependencies:
-      '@logtape/logtape': 2.4.1
+      '@logtape/logtape': 2.4.2
 
   '@manypkg/find-root@3.1.0':
     dependencies:
@@ -5257,13 +5257,13 @@ snapshots:
     optionalDependencies:
       '@opentelemetry/api': 1.9.1
 
-  '@renovatebot/base-image@13.133.0(zod@4.6.5)':
+  '@renovatebot/base-image@13.133.1(zod@4.6.6)':
     dependencies:
-      '@containerbase/base': 14.42.0(zod@4.6.5)
+      '@containerbase/base': 14.42.0(zod@4.6.6)
     optionalDependencies:
-      zod: 4.6.5
+      zod: 4.6.6
 
-  '@renovatebot/detect-tools@4.0.21':
+  '@renovatebot/detect-tools@4.0.22':
     dependencies:
       fs-extra: 11.4.1
       toml-eslint-parser: 1.0.3
@@ -5839,7 +5839,7 @@ snapshots:
       minipass-collect: 2.0.1
       minipass-flush: 1.0.7
       minipass-pipeline: 1.2.4
-      p-map: 7.1.0
+      p-map: 7.1.1
       ssri: 13.0.1
 
   cacheable-lookup@5.0.4: {}
@@ -7605,13 +7605,13 @@ snapshots:
 
   p-map@6.0.0: {}
 
-  p-map@7.1.0: {}
+  p-map@7.1.1: {}
 
   p-mutex@1.0.0:
     dependencies:
       yocto-queue: 1.2.2
 
-  p-queue@9.3.3:
+  p-queue@9.3.5:
     dependencies:
       eventemitter3: 5.0.4
       p-timeout: 7.0.1
@@ -7722,7 +7722,7 @@ snapshots:
       '@types/node': 26.6.5
       long: 5.3.2
 
-  protobufjs@8.8.0:
+  protobufjs@8.8.1:
     dependencies:
       long: 5.3.2
 
@@ -7832,7 +7832,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  renovate@44.166.0(supports-color@7.2.0)(typanion@3.14.0):
+  renovate@44.167.5(supports-color@7.2.0)(typanion@3.14.0):
     dependencies:
       '@aws-sdk/client-codecommit': 3.1139.0
       '@aws-sdk/client-ec2': 3.1139.0
@@ -7865,8 +7865,8 @@ snapshots:
       '@pnpm/parse-overrides': 1001.0.4
       '@qnighy/marshal': 0.1.3
       '@redis/client': 6.3.0(@opentelemetry/api@1.9.1)
-      '@renovatebot/base-image': 13.133.0(zod@4.6.5)
-      '@renovatebot/detect-tools': 4.0.21
+      '@renovatebot/base-image': 13.133.1(zod@4.6.6)
+      '@renovatebot/detect-tools': 4.0.22
       '@renovatebot/good-enough-parser': 2.0.1
       '@renovatebot/osv-offline': 3.0.12(supports-color@7.2.0)
       '@renovatebot/pep440': 5.0.1
@@ -7927,12 +7927,12 @@ snapshots:
       neotraverse: 1.0.1
       node-html-parser: 9.0.4
       p-all: 5.0.1
-      p-map: 7.1.0
-      p-queue: 9.3.3
+      p-map: 7.1.1
+      p-queue: 9.3.5
       p-throttle: 8.1.1
       parse-link-header: 2.0.0
       prettier: 3.9.10
-      protobufjs: 8.8.0
+      protobufjs: 8.8.1
       punycode: 2.3.1
       remark: 15.0.1(supports-color@7.2.0)
       remark-gfm: 4.0.1(supports-color@7.2.0)
@@ -7955,7 +7955,7 @@ snapshots:
       xmldoc: 3.0.0
       yaml: 2.9.1
       yauzl: 3.4.0
-      zod: 4.6.5
+      zod: 4.6.6
     optionalDependencies:
       openpgp: 6.3.2
       re2: 1.27.0
@@ -8649,7 +8649,7 @@ snapshots:
       '@yuku-toolchain/types': 0.18.1
       yuku-core: 0.18.1
 
-  zod@4.6.5: {}
+  zod@4.6.6: {}
 
   zod@4.6.7: {}
 
