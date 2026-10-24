@@ -82,9 +82,9 @@
     "oxfmt": "0.74.0",
     "oxlint": "1.89.0",
     "oxlint-tsgolint": "7.0.2004",
-    "renovate": "44.171.1",
+    "renovate": "44.172.2",
     "tsdown": "0.23.1",
-    "turbo": "2.11.9",
+    "turbo": "2.11.10",
     "typescript": "7.0.2",
     "v8r": "6.1.0",
     "vitest": "5.0.5"
