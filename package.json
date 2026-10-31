@@ -79,11 +79,11 @@
     "markdownlint-cli2": "0.24.0",
     "npm-package-json-lint": "11.0.0",
     "npm-package-json-lint-config-default": "10.0.0",
-    "oxfmt": "0.74.0",
-    "oxlint": "1.89.0",
+    "oxfmt": "0.75.0",
+    "oxlint": "1.90.0",
     "oxlint-tsgolint": "7.0.2005",
-    "renovate": "44.178.3",
-    "tsdown": "0.23.1",
+    "renovate": "44.190.0",
+    "tsdown": "0.23.3",
     "turbo": "2.11.10",
     "typescript": "7.0.2",
     "v8r": "6.1.0",
@@ -95,5 +95,5 @@
   "engines": {
     "node": "^24 || >=26"
   },
-  "packageManager": "pnpm@12.15.0"
+  "packageManager": "pnpm@12.16.1"
 }
