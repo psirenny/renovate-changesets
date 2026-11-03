@@ -82,7 +82,7 @@
     "oxfmt": "0.75.0",
     "oxlint": "1.90.0",
     "oxlint-tsgolint": "7.0.2005",
-    "renovate": "44.198.0",
+    "renovate": "44.198.3",
     "tsdown": "0.23.4",
     "turbo": "2.11.10",
     "typescript": "7.0.2",
