@@ -73,7 +73,7 @@
     "@logtape/testing": "2.4.2",
     "@types/node": "26.6.6",
     "@types/yargs": "17.0.35",
-    "@vitest/coverage-v8": "5.0.5",
+    "@vitest/coverage-v8": "5.1.0",
     "github-actionlint": "1.7.12",
     "markdownlint": "0.42.0",
     "markdownlint-cli2": "0.24.0",
@@ -82,12 +82,12 @@
     "oxfmt": "0.75.0",
     "oxlint": "1.90.0",
     "oxlint-tsgolint": "7.0.2005",
-    "renovate": "44.199.2",
+    "renovate": "44.206.2",
     "tsdown": "0.23.4",
     "turbo": "2.11.10",
     "typescript": "7.0.2",
     "v8r": "6.1.0",
-    "vitest": "5.0.5"
+    "vitest": "5.1.0"
   },
   "peerDependencies": {
     "@changesets/cli": "^3"
@@ -95,5 +95,5 @@
   "engines": {
     "node": "^24 || >=26"
   },
-  "packageManager": "pnpm@12.16.1"
+  "packageManager": "pnpm@12.17.0"
 }
