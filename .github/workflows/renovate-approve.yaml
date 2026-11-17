@@ -15,7 +15,7 @@ jobs:
       github.event.pull_request.user.login == 'psirenny-bot[bot]' && github.event.pull_request.head.repo.full_name ==
       github.repository && github.event.pull_request.head.ref == 'renovate/non-major'
     name: "Renovate: Approve"
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     permissions:
       pull-requests: write
     steps:
