@@ -1,0 +1,5 @@
+---
+"renovate-changesets": patch
+---
+
+Updated [markdownlint-cli2](https://github.com/DavidAnson/markdownlint-cli2) from `0.24.0` to `0.24.1`.
